@@ -21,8 +21,6 @@ int main() {
 	timings_start_section(&t, make_string_slow("lexer"));
 	lexer_test();
 
-	
-
 	timings_print_all(&t, TimingUnit_Millisecond);
 	return 0;
 }

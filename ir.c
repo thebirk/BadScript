@@ -3,9 +3,11 @@ typedef enum {
 	VALUE_NUMBER,
 	VALUE_STRING,
 	VALUE_TABLE,
+	VALUE_FUNCTION,
 } ValueKind;
 
-typedef struct {
+typedef struct Value Value;
+struct Value {
 	ValueKind kind;
 	union {
 		struct {
@@ -17,5 +19,16 @@ typedef struct {
 		struct {
 			void *temp;
 		} table;
+		struct {
+			void *temp;
+		} func;
 	};
-} Value;
+};
+
+Value *null_value = &(Value) { .kind = VALUE_NULL };
+
+Value* call_function(Value *func, Array(Value*) args) {
+	assert(func->kind == VALUE_FUNCTION);
+	// ...
+	return null_value;
+}
