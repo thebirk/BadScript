@@ -53,7 +53,7 @@ typedef Array(String) StringArray;
 // Exclusive with non-local variable
 #define forev(_it, _start, _end) for((_it) = (_start); (_it) < (_end); (_it)++)
 
-#define for_array    (_arr, _val) for(size_t it_index = 0; (_val) =  (_arr).data[it_index], it_index < (_arr).size ; it_index++)
+#define for_array(_arr, _val)     for(size_t it_index = 0; (_val) =  (_arr).data[it_index], it_index < (_arr).size ; it_index++)
 #define for_array_ref(_arr, _val) for(size_t it_index = 0; (_val) = &(_arr).data[it_index], it_index < (_arr).size ; it_index++)
 
 #define array_init(_arr, _cap) do { \

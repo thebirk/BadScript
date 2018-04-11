@@ -6,7 +6,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdarg.h>
+#include <math.h>
 #include <assert.h>
+
+#include "hashmap.h"
 
 #include "common.c"
 #include "timings.c"
@@ -27,12 +30,16 @@ int main(int argc, char **argv) {
 		init_parser(&p, argv[1]);
 	}
 	else {
-		init_parser(&p, "test1.bd");
+		init_parser(&p, "test1.bs");
 	}
 	timings_start_section(&t, make_string_slow("parser"));
 	NodeArray stmts = parse(&p);
 
 	timings_start_section(&t, make_string_slow("ir"));
+	Ir ir = { 0 };
+	memset(&ir, 0, sizeof(Ir));
+	init_ir(&ir, stmts);
+	Value *return_value = ir_run(&ir);
 
 	timings_print_all(&t, TimingUnit_Millisecond);
 	return 0;
