@@ -41,6 +41,8 @@ int main(int argc, char **argv) {
 	Ir ir = { 0 };
 	memset(&ir, 0, sizeof(Ir));
 	init_ir(&ir, stmts);
+
+	timings_start_section(&t, make_string_slow("ir run"));
 	Value *return_value = ir_run(&ir);
 
 	printf("\n");

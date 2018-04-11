@@ -617,12 +617,13 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 		return eval_unary(ir, scope, v->unary.op, rhs);
 	} break;
 	case VALUE_CALL: {
+		Value *func = eval_value(ir, scope, v->call.expr);
 		ValueArray args = { 0 };
 		Value *arg;
 		for_array(v->call.args, arg) {
 			array_add(args, eval_value(ir, scope, arg));
 		}
-		return call_function(ir, v, args);
+		return call_function(ir, func, args);
 	} break;
 	case VALUE_INDEX: {
 		//NOTE: Give error if expr is not a table
