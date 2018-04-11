@@ -18,13 +18,13 @@ int main() {
 	Timings t = {0};
 	timings_init(&t, make_string_slow("BadScript"));
 
-	timings_start_section(&t, make_string_slow("lexer"));
+	timings_start_section(&t, make_string_slow("parser"));
 	//lexer_test();
 
 	Parser p = (Parser){0};
 	memset(&p, 0, sizeof(Parser));
-	init_parser(&p, "parsing.bd");
-	Node *file_block = parse(&p);
+	init_parser(&p, "test1.bd");
+	NodeArray stmts = parse(&p);
 
 	timings_print_all(&t, TimingUnit_Millisecond);
 	return 0;

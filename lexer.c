@@ -356,7 +356,7 @@ void lex(Lexer *lexer) {
 	for_array_ref(lexer->tokens, t) {
 		if (t->kind == TOKEN_IDENT) {
 			if (0) {}
-#define KEYWORD(_str, _enum) else if(strings_match(_str, t->lexeme)) { printf("replaced token\n"); t->kind = _enum; continue; }
+#define KEYWORD(_str, _enum) else if(strings_match(_str, t->lexeme)) { t->kind = _enum; continue; }
 			KEYWORD(string("var"),      TOKEN_VAR)
 			KEYWORD(string("func"),     TOKEN_FUNC)
 			KEYWORD(string("if"),       TOKEN_IF)

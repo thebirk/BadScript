@@ -1,0 +1,7 @@
+var global = 123;
+var a = "Hello, ";
+var b = "world";
+
+func main(args) {
+	print(a, b);
+}

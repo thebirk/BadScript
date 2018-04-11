@@ -57,6 +57,7 @@ struct Node {
 			Node *expr;
 		} ret;
 		struct {
+			String name;
 			StringArray args;
 			Node *block;
 		} func;
@@ -125,8 +126,8 @@ Node* alloc_node(Parser *p) {
 }
 
 Node* make_number(Parser *p, Token number) {
-	Node *n = alloc_node(p);
 	assert(number.kind == TOKEN_NUMBER);
+	Node *n = alloc_node(p);
 
 	n->loc = number.loc;
 
@@ -137,8 +138,8 @@ Node* make_number(Parser *p, Token number) {
 }
 
 Node* make_name(Parser *p, Token name) {
-	Node *n = alloc_node(p);
 	assert(name.kind == TOKEN_IDENT);
+	Node *n = alloc_node(p);
 
 	n->loc = name.loc;
 
@@ -149,8 +150,8 @@ Node* make_name(Parser *p, Token name) {
 }
 
 Node* make_string(Parser *p, Token string) {
-	Node *n = alloc_node(p);
 	assert(string.kind == TOKEN_STRING);
+	Node *n = alloc_node(p);
 
 	n->loc = string.loc;
 
@@ -161,9 +162,9 @@ Node* make_string(Parser *p, Token string) {
 }
 
 Node* make_binary(Parser *p, Token op, Node *lhs, Node *rhs) {
-	Node *n = alloc_node(p);
 	assert(lhs);
 	assert(rhs);
+	Node *n = alloc_node(p);
 
 	n->loc = op.loc;
 
@@ -176,9 +177,9 @@ Node* make_binary(Parser *p, Token op, Node *lhs, Node *rhs) {
 }
 
 Node* make_unary(Parser *p, Token op, Node *rhs) {
-	Node *n = alloc_node(p);
 	assert(op.kind == TOKEN_PLUS || op.kind == TOKEN_MINUS);
 	assert(rhs);
+	Node *n = alloc_node(p);
 
 	n->loc = op.loc;
 
@@ -190,9 +191,9 @@ Node* make_unary(Parser *p, Token op, Node *rhs) {
 }
 
 Node* make_index(Parser *p, Token op, Node *expr, Node *index_expr) {
-	Node *n = alloc_node(p);
 	assert(expr);
 	assert(index_expr);
+	Node *n = alloc_node(p);
 
 	n->loc = op.loc;
 
@@ -204,8 +205,8 @@ Node* make_index(Parser *p, Token op, Node *expr, Node *index_expr) {
 }
 
 Node* make_field(Parser *p, Token field, Node *expr) {
-	Node *n = alloc_node(p);
 	assert(expr);
+	Node *n = alloc_node(p);
 
 	n->loc = field.loc;
 
@@ -241,9 +242,9 @@ Node* make_var(Parser *p, Token var, String name, Node *init) {
 }
 
 Node* make_if(Parser *p, Token _if, Node *cond, Node *block, Node *else_block) {
-	Node *n = alloc_node(p);
 	assert(cond);
 	assert(block);
+	Node *n = alloc_node(p);
 
 	n->loc = _if.loc;
 
@@ -267,16 +268,75 @@ Node* make_block(Parser *p, Token t, NodeArray stmts) {
 }
 
 Node* make_assign(Parser *p, Token op, Node *expr, Node *value) {
-	Node *n = alloc_node(p);
 	assert(expr);
 	assert(value);
 	assert(op.kind == TOKEN_EQUAL);
+	Node *n = alloc_node(p);
 
 	n->loc = op.loc;
 
 	n->kind = NODE_ASSIGN;
 	n->assign.left = expr;
 	n->assign.right = value;
+
+	return n;
+}
+
+Node* make_return(Parser *p, Token ret, Node *expr) {
+	Node *n = alloc_node(p);
+	
+	n->loc = ret.loc;
+
+	n->kind = NODE_RETURN;
+	n->ret.expr = expr;
+
+	return n;
+}
+
+Node* make_continue(Parser *p, Token cont) {
+	Node *n = alloc_node(p);
+
+	n->loc = cont.loc;
+
+	n->kind = NODE_CONTINUE;
+
+	return n;
+}
+
+Node* make_break(Parser *p, Token cont) {
+	Node *n = alloc_node(p);
+
+	n->loc = cont.loc;
+
+	n->kind = NODE_BREAK;
+
+	return n;
+}
+
+Node* make_while(Parser *p, Token _while, Node *cond, Node *block) {
+	assert(cond);
+	assert(block);
+	Node *n = alloc_node(p);
+
+	n->loc = _while.loc;
+
+	n->kind = NODE_WHILE;
+	n->_while.cond = cond;
+	n->_while.block = block;
+
+	return n;
+}
+
+Node* make_func(Parser *p, Token func, String name, StringArray args, Node *block) {
+	assert(block && block->kind == NODE_BLOCK);
+	Node *n = alloc_node(p);
+
+	n->loc = func.loc;
+
+	n->kind = NODE_FUNC;
+	n->func.name = name;
+	n->func.args = args;
+	n->func.block = block;
 
 	return n;
 }
@@ -527,11 +587,54 @@ Node* parse_var(Parser *p) {
 	}
 }
 
+Node* parse_return(Parser *p) {
+	Token ret = p->current_token;
+	if (match_token(p, TOKEN_RETURN)) {
+		Node *expr = 0;
+		if (!is_token(p, TOKEN_SEMICOLON)) {
+			expr = parse_expr(p);
+		}
+		expect(p, TOKEN_SEMICOLON);
+
+		return make_return(p, ret, expr);
+	}
+	else {
+		assert(!"parse_return was called but TOKEN_RETURN was not the current token!");
+		exit(1);
+	}
+}
+
+Node* parse_continue(Parser *p) {
+	Token cont = p->current_token;
+	if (match_token(p, TOKEN_CONTINUE)) {
+		expect(p, TOKEN_SEMICOLON);
+		return make_continue(p, cont);
+	}
+	else {
+		assert(!"parse_continue was called but TOKEN_CONTINUE was not the current token!");
+		exit(1);
+	}
+}
+
+Node* parse_break(Parser *p) {
+	Token cont = p->current_token;
+	if (match_token(p, TOKEN_BREAK)) {
+		expect(p, TOKEN_SEMICOLON);
+		return make_break(p, cont);
+	}
+	else {
+		assert(!"parse_break was called but TOKEN_BREAK was not the current token!");
+		exit(1);
+	}
+}
+
+Node* parse_while(Parser *p);
 Node* parse_if(Parser *p);
 Node* parse_block(Parser *p) {
 	Token lbrace = p->current_token;
 	if (match_token(p, TOKEN_LEFTBRACE)) {
 		NodeArray stmts = {0};
+		//TODO: for
 		do {
 			Node *stmt = 0;
 			if (is_token(p, TOKEN_IF)) {
@@ -542,6 +645,18 @@ Node* parse_block(Parser *p) {
 			}
 			else if (is_token(p, TOKEN_LEFTBRACE)) {
 				stmt = parse_block(p);
+			}
+			else if (is_token(p, TOKEN_RETURN)) {
+				stmt = parse_return(p);
+			}
+			else if (is_token(p, TOKEN_CONTINUE)) {
+				stmt = parse_continue(p);
+			}
+			else if (is_token(p, TOKEN_BREAK)) {
+				stmt = parse_break(p);
+			}
+			else if (is_token(p, TOKEN_WHILE)) {
+				stmt = parse_while(p);
 			}
 			else if (match_token(p, TOKEN_SEMICOLON)) {
 				continue;
@@ -580,6 +695,18 @@ Node* parse_block(Parser *p) {
 	}
 }
 
+Node* parse_while(Parser *p) {
+	Token _while = p->current_token;
+	if (match_token(p, TOKEN_WHILE)) {
+		Node *cond = parse_expr(p);
+		Node *block = parse_block(p);
+		return make_while(p, _while, cond, block);
+	} else {
+		assert(!"parse_while was called but TOKEN_WHILE was not the current token!");
+		exit(1);
+	}
+}
+
 Node* parse_if(Parser *p) {
 	Token _if = p->current_token;
 	if (match_token(p, TOKEN_IF)) {
@@ -607,7 +734,62 @@ Node* parse_if(Parser *p) {
 	}
 }
 
-Node* parse(Parser *p) {
-	Node *expr = parse_block(p);
-	return expr;
+Node* parse_func(Parser *p) {
+	Token func = p->current_token;
+	if (match_token(p, TOKEN_FUNC)) {
+		String name = p->current_token.lexeme;
+		if (!match_token(p, TOKEN_IDENT)) {
+			parser_error(p, "Expected identifier after 'func'");
+		}
+
+		expect(p, TOKEN_LEFTPAR);
+		StringArray args = { 0 };
+
+		if (!is_token(p, TOKEN_RIGHTPAR)) {
+			do {
+				if (is_token(p, TOKEN_IDENT)) {
+					String arg = p->current_token.lexeme;
+					next_token(p);
+					array_add(args, arg);
+				}
+				else {
+					parser_error(p, "Expected identifier while parsing argument list got '%s'", token_kind_to_string(p->current_token.kind));
+				}
+			} while (match_token(p, TOKEN_COMMA));
+		}
+		expect(p, TOKEN_RIGHTPAR);
+
+		Node *block = parse_block(p);
+
+		return make_func(p, func, name, args, block);
+	}
+	else {
+		assert(!"parse_func was called but TOKEN_FUNC was not the current token!");
+		exit(1);
+	}
+}
+
+NodeArray parse(Parser *p) {
+	NodeArray stmts = { 0 };
+
+	do {
+		Node *stmt = 0;
+
+		if (is_token(p, TOKEN_VAR)) {
+			stmt = parse_var(p);
+		}
+		else if (is_token(p, TOKEN_FUNC)) {
+			stmt = parse_func(p);
+		}
+		else if (match_token(p, TOKEN_SEMICOLON)) {
+			continue;
+		}
+		else {
+			parser_error(p, "Unexpected token: '%s'", token_kind_to_string(p->current_token.kind));
+		}
+
+		array_add(stmts, stmt);
+	} while (!is_token(p, TOKEN_EOF));
+
+	return stmts;
 }
