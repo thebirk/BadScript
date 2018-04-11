@@ -14,17 +14,25 @@
 #include "parser.c"
 #include "ir.c"
 
-int main() {
+int main(int argc, char **argv) {
 	Timings t = {0};
-	timings_init(&t, make_string_slow("BadScript"));
+	timings_init(&t, make_string_slow("total time"));
 
-	timings_start_section(&t, make_string_slow("parser"));
+	
 	//lexer_test();
-
+	timings_start_section(&t, make_string_slow("lexer"));
 	Parser p = (Parser){0};
 	memset(&p, 0, sizeof(Parser));
-	init_parser(&p, "test1.bd");
+	if (argc > 1) {
+		init_parser(&p, argv[1]);
+	}
+	else {
+		init_parser(&p, "test1.bd");
+	}
+	timings_start_section(&t, make_string_slow("parser"));
 	NodeArray stmts = parse(&p);
+
+	timings_start_section(&t, make_string_slow("ir"));
 
 	timings_print_all(&t, TimingUnit_Millisecond);
 	return 0;

@@ -1,0 +1,9 @@
+var a = 123;
+var b = "Hello, world!";
+
+// args will be null until tables are implemented
+func main(args) {
+	var a = 321;
+	print("local a: ", a);
+	printf(b);
+}

@@ -19,6 +19,7 @@ typedef enum NodeKind {
 	NODE_ASSIGN,
 	NODE_BLOCK,
 	NODE_TABLE,
+	NODE_NULL,
 } NodeKind;
 
 typedef enum TableEntryKind {
@@ -109,32 +110,41 @@ struct Node {
 		struct {
 			TableEntryArray entries;
 		} table;
+		struct { int unsued;  } _null;
 	};
 };
 
+typedef Array(Node) NodeMemory;
 typedef struct Parser {
 	Lexer lexer;
 	Token current_token;
 	int token_offset;
+	NodeMemory nodes;
 } Parser;
 
-void init_parser(Parser *p, char *path) {
-	init_lexer(&p->lexer, path);
+void init_parser_common(Parser *p) {
 	lex(&p->lexer);
 	p->token_offset = 0;
 	p->current_token = p->lexer.tokens.data[p->token_offset];
+	array_init(p->nodes, 32);
+}
+
+void init_parser(Parser *p, char *path) {
+	init_lexer(&p->lexer, path);
+	init_parser_common(p);
 }
 
 void init_parser_from_string(Parser *p, char *str) {
 	init_lexer_from_string(&p->lexer, str);
-	lex(&p->lexer);
-	p->token_offset = 0;
-	p->current_token = p->lexer.tokens.data[p->token_offset];
+	init_parser_common(p);
 }
 
 Node* alloc_node(Parser *p) {
 	//TODO: Implement arena allocator
-	return malloc(sizeof(Node));
+	//return malloc(sizeof(Node));
+	Node n = { 0 };
+	array_add(p->nodes, n);
+	return (Node*)&p->nodes.data[p->nodes.size-1];
 }
 
 Node* make_number(Parser *p, Token number) {
@@ -161,14 +171,25 @@ Node* make_name(Parser *p, Token name) {
 	return n;
 }
 
-Node* make_string(Parser *p, Token string) {
-	assert(string.kind == TOKEN_STRING);
+Node* make_string(Parser *p, Token str) {
+	assert(str.kind == TOKEN_STRING);
 	Node *n = alloc_node(p);
 
-	n->loc = string.loc;
+	n->loc = str.loc;
 
 	n->kind = NODE_STRING;
-	n->string.string = string.lexeme;
+	n->string.string = str.lexeme;
+	
+	return n;
+}
+
+Node* make_null(Parser *p, Token t) {
+	assert(t.kind = TOKEN_NULL);
+	Node *n = alloc_node(p);
+
+	n->loc = t.loc;
+
+	n->kind = NODE_NULL;
 	
 	return n;
 }
@@ -428,6 +449,9 @@ Node* expr_operand(Parser *p) {
 	else if (match_token(p, TOKEN_STRING)) {
 		return make_string(p, t);
 	}
+	else if (match_token(p, TOKEN_NULL)) {
+		return make_null(p, t);
+	}
 	else if (match_token(p, TOKEN_LEFTPAR)) {
 		// ( 
 		Node *expr = parse_expr(p);
@@ -456,7 +480,7 @@ Node* expr_operand(Parser *p) {
 				array_add(entries, entry);
 			}
 			else {
-				TableEntry entry = (TableEntry) { .kind = ENTRY_NORMAL, .expr = expr };
+				TableEntry entry = (TableEntry) { .kind = ENTRY_NORMAL, .key = 0, .expr = expr };
 				array_add(entries, entry);
 			}
 		} while (!is_token(p, TOKEN_RIGHTBRACE) && match_token(p, TOKEN_COMMA));
