@@ -1,0 +1,23 @@
+{
+	var a = 123;
+	var b;
+	var c = a + b; // Error Number + null is not legal
+	
+	{ /* just because we can! */ }
+	
+	if a == 122+1 {
+		print("I hope nothing else prints!");
+	} else {
+		print("How did a become: ", a);
+	}
+	
+	;;;;; // More just because we can!
+	
+	if a == 121 {
+		print("121 how weird!");
+	} else if a == 120 {
+		print("120 even weirder!");
+	} else {
+		print("I have no glue!");
+	}
+}

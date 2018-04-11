@@ -58,7 +58,7 @@ Value* call_function(Value *func_value, Array(Value*) args) {
 	} break;
 	case FUNCTION_NATIVE: {
 		assert(func.native.function);
-		return (*func.native.function)(args);
+		//return (*func.native.function)(args);
 	} break;
 	case FUNCTION_FFI: {
 		assert(!"Not implemented");

@@ -121,7 +121,8 @@ __declspec(noreturn) void lexer_error
 	vprintf(format, args);
 	va_end(args);
 	printf("\n");
-	exit(1);
+	assert(!"lexer_error");
+	// exit(1);
 }
 
 void read_entire_file(Lexer *lexer, String path) {
@@ -153,6 +154,19 @@ void init_lexer(Lexer *lexer, char *path) {
 	lexer->line = 1;
 	lexer->offset = 1;
 	read_entire_file(lexer, lexer->file);
+
+	array_init(lexer->tokens, 128);
+}
+
+void init_lexer_from_string(Lexer *lexer, char *str) {
+	lexer->file = make_string_slow("<string>");
+	lexer->line = 1;
+	lexer->offset = 1;
+
+	size_t len = strlen(str);
+	lexer->data = malloc(len + 1);
+	lexer->data[len] = 0;
+	memcpy(lexer->data, str, len);
 
 	array_init(lexer->tokens, 128);
 }
@@ -265,6 +279,7 @@ void lex(Lexer *lexer) {
 			BASIC_TOKEN('-', TOKEN_MINUS);
 			BASIC_TOKEN('/', TOKEN_SLASH);
 			BASIC_TOKEN('*', TOKEN_ASTERISK);
+			BASIC_TOKEN('%', TOKEN_MOD);
 			
 			BASIC_TOKEN('=', TOKEN_EQUAL);
 			
@@ -334,6 +349,26 @@ void lex(Lexer *lexer) {
 		}
 
 		lexer_error(lexer, "Unexpected character '%c'/0x%02X\n", *ptr, *ptr);
+	}
+
+	// Detect keywords
+	Token *t;
+	for_array_ref(lexer->tokens, t) {
+		if (t->kind == TOKEN_IDENT) {
+			if (0) {}
+#define KEYWORD(_str, _enum) else if(strings_match(_str, t->lexeme)) { printf("replaced token\n"); t->kind = _enum; continue; }
+			KEYWORD(string("var"),      TOKEN_VAR)
+			KEYWORD(string("func"),     TOKEN_FUNC)
+			KEYWORD(string("if"),       TOKEN_IF)
+			KEYWORD(string("else"),     TOKEN_ELSE)
+			KEYWORD(string("for"),      TOKEN_FOR)
+			KEYWORD(string("while"),    TOKEN_WHILE)
+			KEYWORD(string("return"),   TOKEN_RETURN)
+			KEYWORD(string("continue"), TOKEN_CONTINUE)
+			KEYWORD(string("break"),    TOKEN_BREAK)
+			KEYWORD(string("null"),     TOKEN_NULL)
+#undef KEYWORD
+		}
 	}
 
 	array_add(lexer->tokens, (Token) { TOKEN_EOF });

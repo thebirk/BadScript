@@ -1,0 +1,27 @@
+var a = 123.25;
+var b = {};
+
+var c = 123*321;
+
+func add(a, b) {
+	return a + b;
+}
+
+func main(args) {
+	var map = {
+		1 = 123,
+		"name" = 123,
+	};
+
+    var k;
+    // is the same as
+    var l = null;
+
+
+	map["name"] = map.name + 1;
+
+	if a == 123.25 {
+		print("Yes!");
+	}
+	print(add(a, c));
+}

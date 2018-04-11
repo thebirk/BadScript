@@ -19,7 +19,12 @@ int main() {
 	timings_init(&t, make_string_slow("BadScript"));
 
 	timings_start_section(&t, make_string_slow("lexer"));
-	lexer_test();
+	//lexer_test();
+
+	Parser p = (Parser){0};
+	memset(&p, 0, sizeof(Parser));
+	init_parser(&p, "parsing.bd");
+	Node *file_block = parse(&p);
 
 	timings_print_all(&t, TimingUnit_Millisecond);
 	return 0;

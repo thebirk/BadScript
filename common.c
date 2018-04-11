@@ -3,6 +3,8 @@ typedef struct {
 	size_t len;
 } String;
 
+#define string(_str) (String){_str, sizeof(_str)/sizeof(_str[0])-1}
+
 String make_string_slow(char *c_str) {
 	String result = { 0 };
 
@@ -25,11 +27,24 @@ String make_string_slow_len(char *c_str, size_t len) {
 	return result;
 }
 
+bool strings_match(String a, String b) {
+	if (a.len != b.len) return false;
+	if (a.len == b.len && a.str == b.str) return true;
+
+	for (size_t i = 0; i < a.len; i++) {
+		if (a.str[i] != b.str[i]) return false;
+	}
+
+	return true;
+}
+
 #define Array(_type) struct { \
 	_type* data; \
 	size_t size; \
 	size_t cap; \
 }
+
+typedef Array(String) StringArray;
 
 // Inclusive [_start, _end]
 #define fori(_it, _start, _end) for(int _it = (_start); _it <= (_end); _it++)
