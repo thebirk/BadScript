@@ -435,7 +435,7 @@ Node* expr_base(Parser *p) {
 		else if (match_token(p, TOKEN_LEFTPAR)) {
 			// expr(
 			NodeArray args = { 0 };
-			if (is_token(p, TOKEN_RIGHTPAR)) {
+			if (match_token(p, TOKEN_RIGHTPAR)) {
 				// expr()
 				expr = make_call(p, op, expr, args);
 			}

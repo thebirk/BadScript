@@ -207,7 +207,7 @@ void lex(Lexer *lexer) {
 		if (*ptr == '\n') {
 			ptr++;
 			lexer->line++;
-			lexer->offset++;
+			lexer->offset = 0;
 			continue;
 		}
 
