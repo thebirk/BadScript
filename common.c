@@ -26,7 +26,7 @@ String make_string_slow_len(char *c_str, size_t len) {
 }
 
 #define Array(_type) struct { \
-	_type *data; \
+	_type* data; \
 	size_t size; \
 	size_t cap; \
 }
