@@ -35,6 +35,7 @@ typedef enum TokenKind {
 	TOKEN_STRING,
 	TOKEN_LAND,
 	TOKEN_LOR,
+	TOKEN_DOT,
 	TOKEN_EOF,
 
 	LAST_TOKEN_KIND,
@@ -78,6 +79,7 @@ char* token_kind_to_string(TokenKind kind) {
 		case TOKEN_STRING:       return "TOKEN_STRING";
 		case TOKEN_LAND:         return "TOKEN_LAND";
 		case TOKEN_LOR:          return "TOKEN_LOR";
+		case TOKEN_DOT:          return "TOKEN_DOT";
 		case TOKEN_EOF:          return "TOKEN_EOF";
 
 		default: return "(unimplemented TokenKind name)";
@@ -250,11 +252,11 @@ void lex(Lexer *lexer) {
 		if (0) {}
 #define DOUBLE_TOKEN(_first, _second, _enum) else if(*ptr == _first && *(ptr+1) == _second) { char str[3]; str[0] = _first; str[1] = _second; str[2] = 0; add_token(lexer, (Token) {.kind = _enum, .lexeme = make_string_slow(str)}); ptr += 2; lexer->offset += 2; continue; }
 		DOUBLE_TOKEN('>', '=', TOKEN_GTE)
-			DOUBLE_TOKEN('<', '=', TOKEN_LTE)
-			DOUBLE_TOKEN('=', '=', TOKEN_EQUALS)
-			DOUBLE_TOKEN('!', '=', TOKEN_NE)
-			DOUBLE_TOKEN('&', '&', TOKEN_LAND)
-			DOUBLE_TOKEN('|', '|', TOKEN_LOR)
+		DOUBLE_TOKEN('<', '=', TOKEN_LTE)
+		DOUBLE_TOKEN('=', '=', TOKEN_EQUALS)
+		DOUBLE_TOKEN('!', '=', TOKEN_NE)
+		DOUBLE_TOKEN('&', '&', TOKEN_LAND)
+		DOUBLE_TOKEN('|', '|', TOKEN_LOR)
 #undef DOUBLE_TOKEN
 
 		switch (*ptr) {
@@ -269,6 +271,7 @@ void lex(Lexer *lexer) {
 			BASIC_TOKEN('<', TOKEN_LT);
 			BASIC_TOKEN('>', TOKEN_GT);
 
+			BASIC_TOKEN('.', TOKEN_DOT);
 			BASIC_TOKEN(',', TOKEN_COMMA);
 			BASIC_TOKEN(';', TOKEN_SEMICOLON);
 
