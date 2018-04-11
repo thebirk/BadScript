@@ -21,6 +21,19 @@ typedef enum NodeKind {
 	NODE_TABLE,
 } NodeKind;
 
+typedef enum TableEntryKind {
+	ENTRY_NORMAL, // { expr, expr, expr }
+	ENTRY_KEY,    // { expr = expr, expr = expr }
+} TableEntryKind;
+
+typedef struct Node Node;
+typedef struct TableEntry {
+	TableEntryKind kind;
+	Node *key;
+	Node *expr;
+} TableEntry;
+typedef Array(TableEntry) TableEntryArray;
+
 typedef struct Node Node;
 typedef Array(Node*)  NodeArray;
 struct Node {
@@ -94,8 +107,7 @@ struct Node {
 			NodeArray stmts;
 		} block;
 		struct {
-			NodeArray index; // If null we have {expr, expr, expr.. } otherwise we have {index = expr, index = expr, ...}, index should probably be a number or string
-			NodeArray exprs; // possibly split into another tagged union with default,named
+			TableEntryArray entries;
 		} table;
 	};
 };
@@ -341,6 +353,17 @@ Node* make_func(Parser *p, Token func, String name, StringArray args, Node *bloc
 	return n;
 }
 
+Node* make_table(Parser *p, Token t, TableEntryArray entries) {
+	Node *n = alloc_node(p);
+
+	n->loc = t.loc;
+
+	n->kind = NODE_TABLE;
+	n->table.entries = entries;
+
+	return n;
+}
+
 #ifdef _WIN32
 __declspec(noreturn) void parser_error
 #else
@@ -413,7 +436,33 @@ Node* expr_operand(Parser *p) {
 	}
 	else if (match_token(p, TOKEN_LEFTBRACE)) {
 		// {
-		IncompletePath();
+		TableEntryArray entries = { 0 };
+
+		if (match_token(p, TOKEN_RIGHTBRACE)) {
+			return make_table(p, t, entries);
+		}
+
+		do {
+			if (is_token(p, TOKEN_RIGHTBRACE)) {
+				// We allow one trailing comma
+				break;
+			}
+
+			Node *expr = parse_expr(p);
+
+			if (match_token(p, TOKEN_EQUAL)) {
+				Node *value = parse_expr(p);
+				TableEntry entry = (TableEntry) { .kind = ENTRY_KEY, .key = expr, .expr = value };
+				array_add(entries, entry);
+			}
+			else {
+				TableEntry entry = (TableEntry) { .kind = ENTRY_NORMAL, .expr = expr };
+				array_add(entries, entry);
+			}
+		} while (!is_token(p, TOKEN_RIGHTBRACE) && match_token(p, TOKEN_COMMA));
+		expect(p, TOKEN_RIGHTBRACE);
+
+		return make_table(p, t, entries);
 	}
 	else {
 		parser_error(p, "Unexpected token: %s", token_kind_to_string(p->current_token.kind));
