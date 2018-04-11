@@ -158,7 +158,7 @@ Scope* make_scope(Ir *ir, Scope *parent) {
 Value* scope_get(Ir *ir, Scope *scope, String name) {
 	Value *v;
 	if (hashmap_get(scope->symbols, name.str, &v) == MAP_MISSING) {
-		if (!scope->parent) {
+		if (scope->parent) {
 			return scope_get(ir, scope->parent, name);
 		}
 		else {
@@ -232,9 +232,9 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 	} break;
 	case NODE_CALL: {
 		Stmt *stmt = alloc_stmt(ir);
+		memset(stmt, 0, sizeof(Stmt)); // Clear so that we can use the array
 		stmt->kind = STMT_CALL;
 		stmt->call.expr = expr_to_value(ir, n->call.expr);
-		memset(stmt, 0, sizeof(Stmt)); // Clear so that we can use the array
 		Node *arg;
 		for_array(n->call.args, arg) {
 			array_add(stmt->call.args, expr_to_value(ir, arg));
@@ -341,7 +341,7 @@ void init_ir(Ir *ir, NodeArray stmts) {
 }
 
 Value* call_function(Ir *ir, Value *func_value, ValueArray args);
-Value* eval_value(Ir *ir, Value *v);
+Value* eval_value(Ir *ir, Scope *scope, Value *v);
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	switch (stmt->kind) {
@@ -349,12 +349,12 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		scope_put(ir, scope, stmt->var.name, stmt->var.expr);
 	} break;
 	case STMT_RETURN: {
-		*return_value = eval_value(ir, stmt->ret.expr);
+		*return_value = eval_value(ir, scope, stmt->ret.expr);
 		return true;
 	} break;
 	case STMT_ASSIGN: {
-		Value *lhs = eval_value(ir, stmt->assign.left);
-		Value *rhs = eval_value(ir, stmt->assign.right);
+		Value *lhs = eval_value(ir, scope, stmt->assign.left);
+		Value *rhs = eval_value(ir, scope, stmt->assign.right);
 
 		switch (lhs->kind) {
 		case VALUE_NAME: {
@@ -377,12 +377,12 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		}
 	} break;
 	case STMT_CALL: {
-		Value *func = eval_value(ir, stmt->call.expr);
-		assert(func->kind == VALUE_FUNCTION); //TODO: Error messages Can only call functions duh!
+		Value *func = eval_value(ir, scope, stmt->call.expr);
+		assert(func->kind == VALUE_FUNCTION); //TODO: Can we call other stuff
 		ValueArray args = { 0 };
 		Value *arg;
 		for_array(stmt->call.args, arg) {
-			array_add(args, eval_value(ir, arg));
+			array_add(args, eval_value(ir, scope, arg));
 		}
 		call_function(ir, func, args);
 	} break;
@@ -393,7 +393,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		IncompletePath();
 	} break;
 	case STMT_IF: {
-		Value *cond = eval_value(ir, stmt->_if.cond);
+		Value *cond = eval_value(ir, scope, stmt->_if.cond);
 		//TODO: Better error like function/string etc cant be used as boolean
 		assert(cond->kind == TOKEN_NUMBER || cond->kind == TOKEN_NULL);
 		if (cond->kind == TOKEN_NULL || cond->number.value == 0.0) {
@@ -406,12 +406,12 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		}
 	} break;
 	case STMT_WHILE: {
-		Value *cond = eval_value(ir, stmt->_while.cond);
+		Value *cond = eval_value(ir, scope, stmt->_while.cond);
 		//TODO: Better error like function/string etc cant be used as boolean
 		assert(cond->kind == TOKEN_NUMBER || cond->kind == TOKEN_NULL);
 		while (cond->kind != TOKEN_NULL && cond->number.value != 0) {
 			return eval_stmt(ir, scope, stmt->_while.block, return_value);
-			cond = eval_value(ir, stmt->_while.cond);
+			cond = eval_value(ir, scope, stmt->_while.cond);
 		}
 	} break;
 	case STMT_BLOCK: {
@@ -470,11 +470,11 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args) {
 	return null_value;
 }
 
-Value* eval_unary(Ir *ir, TokenKind op, Value *v) {
+Value* eval_unary(Ir *ir, Scope *scope, TokenKind op, Value *v) {
 	IncompletePath();
 }
 
-Value* eval_binop(Ir *ir, TokenKind op, Value *lhs, Value *rhs) {
+Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	switch (op) {
 	case TOKEN_PLUS: {
 		if (lhs->kind == VALUE_NUMBER) {
@@ -600,22 +600,27 @@ Value* eval_binop(Ir *ir, TokenKind op, Value *lhs, Value *rhs) {
 	exit(1);
 }
 
-Value* eval_value(Ir *ir, Value *v) {
+Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 	switch (v->kind) {
+	case VALUE_NAME: {
+		Value *var = scope_get(ir, scope, v->name.name);
+		assert(var);//TODO: Error message
+		return eval_value(ir, scope, var);
+	} break;
 	case VALUE_BINOP: {
-		Value *lhs = eval_value(ir, v->binary.lhs);
-		Value *rhs = eval_value(ir, v->binary.rhs);
-		return eval_binop(ir, v->binary.op, lhs, rhs);
+		Value *lhs = eval_value(ir, scope, v->binary.lhs);
+		Value *rhs = eval_value(ir, scope, v->binary.rhs);
+		return eval_binop(ir, scope, v->binary.op, lhs, rhs);
 	} break;
 	case VALUE_UNARY: {
-		Value *rhs = eval_value(ir, v);
-		return eval_unary(ir, v->unary.op, rhs);
+		Value *rhs = eval_value(ir, scope, v);
+		return eval_unary(ir, scope, v->unary.op, rhs);
 	} break;
 	case VALUE_CALL: {
 		ValueArray args = { 0 };
 		Value *arg;
 		for_array(v->call.args, arg) {
-			array_add(args, eval_value(ir, arg));
+			array_add(args, eval_value(ir, scope, arg));
 		}
 		return call_function(ir, v, args);
 	} break;

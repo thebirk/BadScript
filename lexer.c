@@ -107,6 +107,7 @@ typedef struct Lexer {
 	size_t line;
 	size_t offset;
 	Array(Token) tokens;
+	StringArray strings;
 } Lexer;
 
 #ifdef _WIN32
@@ -146,6 +147,8 @@ void read_entire_file(Lexer *lexer, String path) {
 
 void add_token(Lexer *lexer, Token t) {
 	t.loc = (SourceLoc) { lexer->file, lexer->line, lexer->offset };
+	t.lexeme = make_string_slow_len(t.lexeme.str, t.lexeme.len);
+	array_add(lexer->strings, t.lexeme);
 	array_add(lexer->tokens, t);
 }
 

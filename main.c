@@ -30,7 +30,9 @@ int main(int argc, char **argv) {
 		init_parser(&p, argv[1]);
 	}
 	else {
-		init_parser(&p, "test1.bs");
+		char *path = "minimal.bs";
+		printf("Parsing: %s\n", path);
+		init_parser(&p, path);
 	}
 	timings_start_section(&t, make_string_slow("parser"));
 	NodeArray stmts = parse(&p);
@@ -41,6 +43,7 @@ int main(int argc, char **argv) {
 	init_ir(&ir, stmts);
 	Value *return_value = ir_run(&ir);
 
+	printf("\n");
 	timings_print_all(&t, TimingUnit_Millisecond);
 	return 0;
 }
