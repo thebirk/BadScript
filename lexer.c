@@ -113,7 +113,7 @@ typedef struct Lexer {
 #ifdef _WIN32
 __declspec(noreturn) void lexer_error
 #else
-#error "Implement noreturn for lexer_error on this platoform"
+__attribute__((noreturn)) void lexer_error
 #endif
 (Lexer *lexer, char *format, ...) {
 	printf("%s(%lld, %lld): ", lexer->file.str, lexer->line, lexer->offset);

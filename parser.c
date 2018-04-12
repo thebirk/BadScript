@@ -388,7 +388,7 @@ Node* make_table(Parser *p, Token t, TableEntryArray entries) {
 #ifdef _WIN32
 __declspec(noreturn) void parser_error
 #else
-#error "Implement noreturn for lexer_error on this platoform"
+__attribute__((noreturn)) void parser_error
 #endif
 (Parser *parser, char *format, ...) {
 	printf("%s(%lld, %lld): ", parser->lexer.file.str, parser->lexer.line, parser->lexer.offset);
