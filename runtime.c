@@ -1,3 +1,29 @@
+Value* runtime_print(Ir *ir, ValueArray args);
+Value* runtime_input(Ir *ir, ValueArray args) {
+	// Prints a prompt if there is an argument for it and return the user input
+	if (args.size > 0) {
+		runtime_print(ir, args);
+	}
+#define BUFFER_SIZE 4096
+	char buffer[BUFFER_SIZE];
+	size_t offset = 0;
+	char c = 0;
+	while ((c = getchar())) {
+		if (offset == BUFFER_SIZE) {
+			buffer[offset-1] = 0;
+			break;
+		} 
+		else if (c == '\n') {
+			buffer[offset] = 0;
+			break;
+		}
+		else {
+			buffer[offset++] = c;
+		}
+	}
+	return make_string_value(ir, make_string_slow(buffer));
+}
+
 Value* runtime_type(Ir *ir, ValueArray args) {
 	// When we have tables(aka array) if the
 	// users passes more than one parameter return an array of strings
@@ -27,6 +53,11 @@ Value* runtime_type(Ir *ir, ValueArray args) {
 	}
 }
 
+Value* runtime_println(Ir *ir, ValueArray args) {
+	runtime_print(ir, args);
+	printf("\n");
+}
+
 Value* runtime_print(Ir *ir, ValueArray args) {
 	if (args.size > 0) {
 		Value *v;
@@ -42,7 +73,6 @@ Value* runtime_print(Ir *ir, ValueArray args) {
 			}
 		}
 	}
-	printf("\n");
 
 	return null_value;
 }
@@ -77,6 +107,8 @@ Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 
 void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("print"), make_native_function(ir, runtime_print));
+	scope_add(ir, ir->global_scope, string("println"), make_native_function(ir, runtime_println));
 	scope_add(ir, ir->global_scope, string("msgbox"), make_native_function(ir, runtime_msgbox));
 	scope_add(ir, ir->global_scope, string("type"), make_native_function(ir, runtime_type));
+	scope_add(ir, ir->global_scope, string("input"), make_native_function(ir, runtime_input));
 }
