@@ -59,11 +59,12 @@ int main(int argc, char **argv) {
 			}
 		}
 	}
+	/* Commented out because we use the line under while debugging
 	if (filename.str == 0) {
 		printf("No file was provided!\n");
 		print_usage(argv[0]);
 		exit(1);
-	}
+	}*/
 	if (argc == 1) {
 		filename = make_string_slow("tests/strings.bs");
 		printf("Parsing: %s\n", filename.str);
@@ -98,12 +99,10 @@ int main(int argc, char **argv) {
 	timings_start_section(&t, make_string_slow("ir run"));
 	Value *return_value = ir_run(&ir);
 
-	//TODO: Make timings optional and dont print newline if we dont print timings
 	if (print_timings) {
 		printf("\n");
 		timings_print_all(&t, TimingUnit_Millisecond);
-	}
-	
+	}	
 	
 	if (return_value->kind == VALUE_NUMBER) {
 		return return_value->number.value;
