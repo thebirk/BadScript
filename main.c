@@ -45,6 +45,7 @@ int main(int argc, char **argv) {
 	timings_start_section(&t, make_string_slow("ir run"));
 	Value *return_value = ir_run(&ir);
 
+	//TODO: Make timings optional and dont print newline if we dont print timings
 	printf("\n");
 	timings_print_all(&t, TimingUnit_Millisecond);
 	
