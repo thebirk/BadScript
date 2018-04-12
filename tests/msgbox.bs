@@ -1,0 +1,3 @@
+func main(args) {
+	msgbox("Hello!", ":D");
+}
