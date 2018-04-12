@@ -1,8 +1,12 @@
+Only native functions has variable arguments support. This is represented here as `*args`
+
 # Functions
 
-## print(args) <a name="print"></a>
+## print
 ---
 Prints all the arguments to stdout
+#### Arguments
+* *args
 #### Returns
 * null
 #### Example
@@ -10,9 +14,11 @@ Prints all the arguments to stdout
 print("1 + 2 = ", 1+2);
 ```
 
-## println(args)
+## println
 ---
 Same as [print](#print) but prints a newline at the end
+#### Arguments
+* *args
 #### Returns
 * null
 #### Example
@@ -20,9 +26,11 @@ Same as [print](#print) but prints a newline at the end
 println("Hello, world!");
 ```
 
-## type(v)
+## type
 ---
 Returns the type of an element as a string
+#### Arguments
+* v - Any value
 #### Returns
 * string - Representing the type
 #### Example
@@ -31,9 +39,11 @@ Returns the type of an element as a string
 type(2) == "number"
 ```
 
-## input(args)
+## input
 ---
-Prints args as if they were passed to print then read input from stdin until a newline is found or the string exceeds 4096 character.
+Prints args as if they were passed to [print](#print) then read input from stdin until a newline is found or the string exceeds 4096 character.
+#### Arguments
+* *args
 #### Returns
 * string - User input
 #### Example
