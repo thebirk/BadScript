@@ -94,3 +94,42 @@ typedef Array(String) StringArray;
 		(_arr).data[(_arr).size-1] = (_el); \
 	} \
 } while(0)
+
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+int bs_getch() {
+	DWORD mode, cc;
+	HANDLE h = GetStdHandle( STD_INPUT_HANDLE );
+	if (h == NULL) {
+		return '\n'; // console not found
+	}
+	GetConsoleMode( h, &mode );
+	SetConsoleMode( h, mode & ~(ENABLE_ECHO_INPUT) );
+	int c = 0;
+	ReadConsoleA( h, &c, 1, &cc, NULL );
+	SetConsoleMode( h, mode );
+	if (c == '\r') {
+		return '\n';
+	}
+	return c;
+}
+#elif POSIX
+#include <termios.h>
+#include <unistd.h>
+int bs_getch() {
+	//NOTE: Untested, pulled straight from stackoverflow
+	struct termios oldt, newt;
+	int ch;
+	tcgetattr(STDIN_FILENO, &oldt);
+	newt = oldt;
+	newt.c_lflag &= ~(ICANON | ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+	ch = getchar();
+	tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+	return ch;
+}
+#else
+#error Implement bs_getch for this platform
+#endif

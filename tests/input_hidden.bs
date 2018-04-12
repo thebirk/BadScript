@@ -1,0 +1,5 @@
+func main(args) {
+	var name = input("user: ");
+	var password = input_hidden("password: ");
+	println("user: '", name, "', password: '", password, "'");
+}

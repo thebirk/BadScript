@@ -4,15 +4,40 @@ Value* runtime_input(Ir *ir, ValueArray args) {
 	if (args.size > 0) {
 		runtime_print(ir, args);
 	}
-#define BUFFER_SIZE 4096
-	char buffer[BUFFER_SIZE];
+#define INPUT_BUFFER_SIZE 4096
+	char buffer[INPUT_BUFFER_SIZE];
 	size_t offset = 0;
 	char c = 0;
 	while ((c = getchar())) {
-		if (offset == BUFFER_SIZE) {
+		if (offset == INPUT_BUFFER_SIZE) {
 			buffer[offset-1] = 0;
 			break;
 		} 
+		else if (c == '\n') {
+			buffer[offset] = 0;
+			break;
+		}
+		else {
+			buffer[offset++] = c;
+		}
+	}
+	return make_string_value(ir, make_string_slow(buffer));
+}
+
+Value* runtime_input_hidden(Ir *ir, ValueArray args) {
+	// Prints a prompt if there is an argument for it and return the user input
+	// Does not echo input
+	if (args.size > 0) {
+		runtime_print(ir, args);
+	}
+	char buffer[INPUT_BUFFER_SIZE];
+	size_t offset = 0;
+	char c = 0;
+	while ((c = bs_getch())) {
+		if (offset == INPUT_BUFFER_SIZE) {
+			buffer[offset - 1] = 0;
+			break;
+		}
 		else if (c == '\n') {
 			buffer[offset] = 0;
 			break;
@@ -132,4 +157,5 @@ void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("input"), make_native_function(ir, runtime_input));
 	scope_add(ir, ir->global_scope, string("str2num"), make_native_function(ir, runtime_str2num));
 	scope_add(ir, ir->global_scope, string("num2str"), make_native_function(ir, runtime_num2str));
+	scope_add(ir, ir->global_scope, string("input_hidden"), make_native_function(ir, runtime_input_hidden));
 }
