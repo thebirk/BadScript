@@ -3,4 +3,3 @@ func main(args) {
 	var password = input("password: ");
 	println("user: '", name, "', password: '", password, "'");
 }
-	

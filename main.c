@@ -47,5 +47,11 @@ int main(int argc, char **argv) {
 
 	printf("\n");
 	timings_print_all(&t, TimingUnit_Millisecond);
-	return 0;
+	
+	if (return_value->kind == VALUE_NUMBER) {
+		return return_value->number.value;
+	}
+	else {
+		return 0;
+	}
 }

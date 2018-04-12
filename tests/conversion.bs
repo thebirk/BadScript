@@ -1,0 +1,14 @@
+func get_num() {
+	return str2num(input("Enter a number: "));
+}
+
+func main(args) {
+	var a = get_num();
+	var b = get_num();
+	var result = num2str(a+b);
+	if type(result) != "string" {
+		println("num2str did not return string!");
+		return;
+	}
+	println("a + b = ", result);
+}

@@ -56,6 +56,7 @@ Value* runtime_type(Ir *ir, ValueArray args) {
 Value* runtime_println(Ir *ir, ValueArray args) {
 	runtime_print(ir, args);
 	printf("\n");
+	return null_value;
 }
 
 Value* runtime_print(Ir *ir, ValueArray args) {
@@ -97,6 +98,24 @@ Value* runtime_msgbox(Ir *ir, ValueArray args) {
 #endif
 }
 
+Value* runtime_str2num(Ir *ir, ValueArray args) {
+	// When we have table perhabs return an array on multiple args
+	assert(args.size == 1); //TODO: Error message
+	assert(args.data[0]->kind == VALUE_STRING); //TODO: Error message
+	double n = strtod(args.data[0]->string.str.str, 0);
+	return make_number_value(ir, n);
+}
+
+Value* runtime_num2str(Ir *ir, ValueArray args) {
+	// Take second argument specifying precision
+	assert(args.size == 1);
+	assert(args.data[0]->kind == VALUE_NUMBER);
+	char buffer[128];
+	snprintf(buffer, 128, "%f", args.data[0]->number.value);
+	return null_value;
+	//return make_string_value(ir, make_string_slow(buffer));
+}
+
 Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_FUNCTION;
@@ -111,4 +130,6 @@ void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("msgbox"), make_native_function(ir, runtime_msgbox));
 	scope_add(ir, ir->global_scope, string("type"), make_native_function(ir, runtime_type));
 	scope_add(ir, ir->global_scope, string("input"), make_native_function(ir, runtime_input));
+	scope_add(ir, ir->global_scope, string("str2num"), make_native_function(ir, runtime_str2num));
+	scope_add(ir, ir->global_scope, string("num2str"), make_native_function(ir, runtime_num2str));
 }

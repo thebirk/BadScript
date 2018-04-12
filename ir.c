@@ -219,6 +219,13 @@ Value* make_string_value(Ir *ir, String str) {
 	return v;
 }
 
+Value* make_number_value(Ir *ir, double n) {
+	Value *v = alloc_value(ir);
+	v->kind = VALUE_NUMBER;
+	v->number.value = n;
+	return v;
+}
+
 Stmt* alloc_stmt(Ir *ir) {
 	return calloc(1, sizeof(Stmt));
 }

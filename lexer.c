@@ -202,6 +202,15 @@ void lex(Lexer *lexer) {
 	char *ptr = lexer->data;
 
 	while (*ptr) {
+		if (*ptr == '#' && lexer->line == 1 && lexer->offset == 1) {
+			while (*ptr && *ptr != '\n') {
+				ptr++;
+			}
+			lexer->line++;
+			lexer->offset = 1;
+			continue;
+		}
+
 		if (*ptr == '\r') {
 			ptr++;
 			continue;
