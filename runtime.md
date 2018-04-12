@@ -63,6 +63,21 @@ var a = input("Input something: ");
 println(a);
 ```
 
+## input_hidden
+---
+Same as [input](#input) except input is not echoed.
+
+#### Arguments
+* \*args
+
+#### Returns
+* string - User input
+
+#### Example
+```lua
+var a = input_hidden("password: ");
+```
+
 ## msgbox
 ---
 Creates a simple popup window on platform where it is supported, prints to stdout otherwise.
