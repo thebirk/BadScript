@@ -273,7 +273,7 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		stmt->kind = STMT_IF;
 		stmt->_if.cond = expr_to_value(ir, n->_if.cond);
 		stmt->_if.if_block = convert_node_to_stmt(ir, n->_if.block);
-		if(stmt->_if.else_block) {
+		if(n->_if.else_block) {
 			stmt->_if.else_block = convert_node_to_stmt(ir, n->_if.else_block);
 		}
 		return stmt;

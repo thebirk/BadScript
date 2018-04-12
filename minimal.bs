@@ -4,6 +4,7 @@ func factorial_recursive(n) {
 	} else {
 		return n * factorial_recursive(n-1);
 	}
+	return "if this is returned we have a problem again!";
 }
 
 func factorial_iterative(n) {
@@ -18,7 +19,7 @@ func factorial_iterative(n) {
 
 func print_even_numbers(first, last) {
 	var i = first;
-	while(i < last) {
+	while(i <= last) {
 		if (i % 2) == 0 {
 			print(i, " is even!");
 		}
@@ -29,5 +30,5 @@ func print_even_numbers(first, last) {
 func main(args) {
 	print("Recursive: ", factorial_recursive(5));
 	print("Iterative: ", factorial_iterative(5));
-	print_even_numbers(1, 100);
+	print_even_numbers(1, 10);
 }
