@@ -224,7 +224,12 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		Stmt *stmt = alloc_stmt(ir);
 		stmt->kind = STMT_VAR;
 		stmt->var.name = n->var.name;
-		stmt->var.expr = expr_to_value(ir, n->var.expr);
+		if (n->var.expr) {
+			stmt->var.expr = expr_to_value(ir, n->var.expr);
+		}
+		else {
+			stmt->var.expr = null_value;
+		}
 		return stmt;
 	} break;
 	case NODE_RETURN: {
@@ -247,7 +252,9 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 	case NODE_BLOCK: {
 		Stmt *stmt = alloc_stmt(ir);
 		stmt->kind = STMT_BLOCK;
-		stmt->block.stmts = convert_nodes_to_stmts(ir, n->block.stmts);
+		if (n->block.stmts.size > 0) {
+			stmt->block.stmts = convert_nodes_to_stmts(ir, n->block.stmts);
+		}
 		return stmt;
 	} break;
 	case NODE_ASSIGN: {
@@ -330,36 +337,7 @@ void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
 	}
 }
 
-Value* global_print(Ir *ir, ValueArray args) {
-	Value *v;
-	for_array(args, v) {
-		if (v->kind == VALUE_STRING) {
-			printf("%.*s", (int)v->string.str.len, v->string.str.str);
-		}
-		else if (v->kind == VALUE_NUMBER) {
-			printf("%f", v->number.value);
-		}
-		else if (v->kind == VALUE_NULL) {
-			printf("(null)");
-		}
-	}
-	printf("\n");
-
-	return null_value;
-}
-
-Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
-	Value *v = alloc_value(ir);
-	v->kind = VALUE_FUNCTION;
-	v->func.kind = FUNCTION_NATIVE;
-	v->func.native.function = func;
-	return v;
-}
-
-void add_globals(Ir *ir) {
-	scope_add(ir, ir->global_scope, string("print"), make_native_function(ir, global_print));
-}
-
+void add_globals(Ir *ir); // Found in runtime.c
 void init_ir(Ir *ir, NodeArray stmts) {
 	array_init(ir->value_memory, 512);
 	ir->global_scope = make_scope(ir, 0);
@@ -447,11 +425,13 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		}
 	} break;
 	case STMT_BLOCK: {
-		Scope *block_scope = make_scope(ir, scope);
-		Stmt *block_stmt;
-		for_array(stmt->block.stmts, block_stmt) {
-			bool returned = eval_stmt(ir, block_scope, block_stmt, return_value);
-			if (returned) return returned;
+		if (stmt->block.stmts.size > 0) {
+			Scope *block_scope = make_scope(ir, scope);
+			Stmt *block_stmt;
+			for_array(stmt->block.stmts, block_stmt) {
+				bool returned = eval_stmt(ir, block_scope, block_stmt, return_value);
+				if (returned) return returned;
+			}
 		}
 	} break;
 	default: {
@@ -470,14 +450,18 @@ Value* eval_function(Ir *ir, Function func, ValueArray args) {
 	Value *return_value = null_value;
 
 	assert(func.normal.arg_names.size == args.size);
-	Scope *scope = make_scope(ir, ir->file_scope);
-	for (int i = 0; i < args.size; i++) {
-		scope_add(ir, scope, func.normal.arg_names.data[i], args.data[i]);
-	}
-	Stmt *stmt;
-	for_array(func.normal.stmts, stmt) {
-		bool returned = eval_stmt(ir, scope, stmt, &return_value);
-		if (returned) return return_value;
+
+
+	if (func.normal.stmts.size > 0) {
+		Scope *scope = make_scope(ir, ir->file_scope);
+		for (int i = 0; i < args.size; i++) {
+			scope_add(ir, scope, func.normal.arg_names.data[i], args.data[i]);
+		}
+		Stmt *stmt;
+		for_array(func.normal.stmts, stmt) {
+			bool returned = eval_stmt(ir, scope, stmt, &return_value);
+			if (returned) return return_value;
+		}
 	}
 
 	return return_value;

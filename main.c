@@ -16,12 +16,12 @@
 #include "lexer.c"
 #include "parser.c"
 #include "ir.c"
+#include "runtime.c"
 
 int main(int argc, char **argv) {
 	Timings t = {0};
 	timings_init(&t, make_string_slow("total time"));
 
-	
 	//lexer_test();
 	timings_start_section(&t, make_string_slow("lexer"));
 	Parser p = (Parser){0};

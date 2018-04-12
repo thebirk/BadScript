@@ -30,5 +30,7 @@ func print_even_numbers(first, last) {
 func main(args) {
 	print("Recursive: ", factorial_recursive(5));
 	print("Iterative: ", factorial_iterative(5));
-	print_even_numbers(1, 10);
+	print_even_numbers(1, 100);
+	
+	// msgbox("This is a very important message!", "Hey you!");
 }
