@@ -1,0 +1,13 @@
+func main(args) {
+	println(-1);
+	println(+1);
+	var num = 321;
+	println(-num);
+	println(-str2num("-321"));
+	
+	// the above should run
+	// below shuld error
+	
+	//println("dfdfg" < "sdf");
+	//println(-"wut?");
+}

@@ -11,6 +11,13 @@ typedef Array(Value*) ValueArray;
 typedef struct Stmt Stmt;
 typedef Array(Stmt*) StmtArray;
 
+#ifdef _WIN32
+__declspec(noreturn)
+#else
+__attribute__((noreturn))
+#endif
+void ir_error(Ir *ir, char *format, ...);
+
 typedef struct Function {
 	FunctionKind kind;
 	union {
@@ -41,6 +48,21 @@ typedef enum ValueKind {
 	VALUE_CALL,
 	VALUE_FIELD,
 } ValueKind;
+
+#define isnull(_v)     ((_v)->kind == VALUE_NULL)
+#define isnumber(_v)   ((_v)->kind == VALUE_NUMBER)
+#define isstring(_v)   ((_v)->kind == VALUE_STRING)
+#define istable(_v)    ((_v)->kind == VALUE_TABLE)
+#define isfunction(_v) ((_v)->kind == VALUE_FUNCTION)
+#define isbinop(_v)    ((_v)->kind == VALUE_BINOP)
+#define isname(_v)     ((_v)->kind == VALUE_NAME)
+#define isunary(_v)    ((_v)->kind == VALUE_UNARY)
+#define isindex(_v)    ((_v)->kind == VALUE_INDEX)
+#define iscall(_v)     ((_v)->kind == VALUE_CALL)
+#define isfield(_v)    ((_v)->kind == VALUE_FIELD)
+
+// lowest level of expr: null,number,string,table
+#define isbasic(_v) (isnull(_v) || isnumber(_v) || isstring(_v) || istable(_v))
 
 struct Value {
 	ValueKind kind;
@@ -99,6 +121,7 @@ typedef enum StmtKind {
 
 typedef struct Stmt {
 	StmtKind kind;
+	SourceLoc loc;
 	union {
 		struct {
 			String name;
@@ -163,7 +186,7 @@ Value* scope_get(Ir *ir, Scope *scope, String name) {
 			return scope_get(ir, scope->parent, name);
 		}
 		else {
-			IncompletePath(); //TODO: Do ir_error
+			ir_error(ir, "Symbol '%.*s' does not exist.", (int)name.len, name.str);
 		}
 	}
 	return v;
@@ -186,7 +209,20 @@ void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
 	Value *test = 0;
 	hashmap_get(scope->symbols, name.str, &test);
 	if (test) {
-		hashmap_put(scope->symbols, name.str, v);
+		switch (test->kind) {
+		case VALUE_NULL:
+		case VALUE_STRING:
+		case VALUE_NUMBER:
+		case VALUE_TABLE: {
+			hashmap_put(scope->symbols, name.str, v);
+		} break;
+		case VALUE_FUNCTION: {
+			ir_error(ir, "Cannot assign to a function!");
+		} break;
+		default: {
+			ir_error(ir, "Cannot assign to symbol!");
+		}break;
+		}
 	}
 	else {
 		if (scope->parent) {
@@ -200,10 +236,26 @@ void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
 
 typedef Array(Value) ValueMemory;
 struct Ir {
+	SourceLoc loc;
 	ValueMemory value_memory;
 	Scope *global_scope;
 	Scope *file_scope;
 };
+
+#ifdef _WIN32
+__declspec(noreturn)
+#else
+__attribute__((noreturn))
+#endif
+void ir_error(Ir *ir, char *format, ...) {
+	printf("%s(%lld, %lld): ", ir->loc.file.str, ir->loc.line, ir->loc.offset);
+	va_list args;
+	va_start(args, format);
+	vprintf(format, args);
+	va_end(args);
+	printf("\n");
+	exit(1);
+}
 
 Value* alloc_value(Ir *ir) {
 	return calloc(1, sizeof(Value));
@@ -226,8 +278,10 @@ Value* make_number_value(Ir *ir, double n) {
 	return v;
 }
 
-Stmt* alloc_stmt(Ir *ir) {
-	return calloc(1, sizeof(Stmt));
+Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
+	Stmt *stmt = calloc(1, sizeof(Stmt));
+	stmt->loc = loc;
+	return stmt;
 }
 
 StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes);
@@ -235,7 +289,7 @@ Value* expr_to_value(Ir *ir, Node *n);
 Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 	switch (n->kind) {
 	case NODE_VAR: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_VAR;
 		stmt->var.name = n->var.name;
 		if (n->var.expr) {
@@ -247,24 +301,24 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		return stmt;
 	} break;
 	case NODE_RETURN: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_RETURN;
 		stmt->ret.expr = 0;
 		if (n->ret.expr) stmt->ret.expr = expr_to_value(ir, n->ret.expr);
 		return stmt;
 	} break;
 	case NODE_BREAK: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_BREAK;
 		return stmt;
 	} break;
 	case NODE_CONTINUE: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_CONTINUE;
 		return stmt;
 	} break;
 	case NODE_BLOCK: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_BLOCK;
 		if (n->block.stmts.size > 0) {
 			stmt->block.stmts = convert_nodes_to_stmts(ir, n->block.stmts);
@@ -272,15 +326,14 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		return stmt;
 	} break;
 	case NODE_ASSIGN: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_ASSIGN;
 		stmt->assign.left = expr_to_value(ir, n->assign.left);
 		stmt->assign.right = expr_to_value(ir, n->assign.right);
 		return stmt;
 	} break;
 	case NODE_CALL: {
-		Stmt *stmt = alloc_stmt(ir);
-		memset(stmt, 0, sizeof(Stmt)); // Clear so that we can use the array
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_CALL;
 		stmt->call.expr = expr_to_value(ir, n->call.expr);
 		if (n->call.args.size > 0) {
@@ -292,7 +345,7 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		return stmt;
 	} break;
 	case NODE_IF: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_IF;
 		stmt->_if.cond = expr_to_value(ir, n->_if.cond);
 		stmt->_if.if_block = convert_node_to_stmt(ir, n->_if.block);
@@ -302,7 +355,7 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		return stmt;
 	} break;
 	case NODE_WHILE: {
-		Stmt *stmt = alloc_stmt(ir);
+		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_WHILE;
 		stmt->_while.cond = expr_to_value(ir, n->_while.cond);
 		stmt->_while.block = convert_node_to_stmt(ir, n->_while.block);
@@ -318,20 +371,24 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes) {
 	StmtArray stmts = { 0 };
 
-	Node *n;
-	for_array(nodes, n) {
-		array_add(stmts, convert_node_to_stmt(ir, n));
+	if (nodes.size > 0) {
+		Node *n;
+		for_array(nodes, n) {
+			array_add(stmts, convert_node_to_stmt(ir, n));
+		}
 	}
 
 	return stmts;
 }
 
+Value* eval_value(Ir *ir, Scope *scope, Value *v);
 void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
 	Node *n;
 	for_array(stmts, n) {
+		ir->loc = n->loc;
 		switch (n->kind) {
 		case NODE_VAR: {
-			Value *v = expr_to_value(ir, n->var.expr);
+			Value *v = eval_value(ir, ir->file_scope, expr_to_value(ir, n->var.expr));
 			scope_add(ir, ir->file_scope, n->var.name, v);
 		} break;
 		case NODE_FUNC: {
@@ -367,9 +424,11 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args);
 Value* eval_value(Ir *ir, Scope *scope, Value *v);
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
+	ir->loc = stmt->loc;
 	switch (stmt->kind) {
 	case STMT_VAR: {
-		scope_add(ir, scope, stmt->var.name, stmt->var.expr);
+		Value *v = eval_value(ir, scope, stmt->var.expr);
+		scope_add(ir, scope, stmt->var.name, v);
 	} break;
 	case STMT_RETURN: {
 		*return_value = eval_value(ir, scope, stmt->ret.expr);
@@ -381,6 +440,10 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 			// Error not supported assignemtn or something else?
 			lhs = eval_value(ir, scope, stmt->assign.left);
 		}
+		if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
+			ir_error(ir, "Cannot assign to left hand");
+		}
+
 		Value *rhs = eval_value(ir, scope, stmt->assign.right);
 
 		switch (lhs->kind) {
@@ -507,15 +570,58 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args) {
 }
 
 Value* eval_unary(Ir *ir, Scope *scope, TokenKind op, Value *v) {
-	IncompletePath();
+	Value *res = alloc_value(ir);
+	res->kind = TOKEN_NUMBER;
+	Value *rhs = eval_value(ir, scope, v->unary.v);
+	if (!isnumber(rhs)) {
+		ir_error(ir, "Unary operators only work with numbers.");
+	}
+	switch (op) {
+	case TOKEN_PLUS: {
+		res->number.value = +rhs->number.value;
+	} break;
+	case TOKEN_MINUS: {
+		res->number.value = -rhs->number.value;
+	} break;
+	default: {
+		assert(!"Invalid unary op");
+		exit(1);
+	} break;
+	}
+
+	return res;
+}
+
+Value* eval_number_op(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
+	Value *v = alloc_value(ir);
+	v->kind = VALUE_NUMBER;
+	switch (op) {
+	case TOKEN_PLUS:     v->number.value = lhs->number.value + rhs->number.value;
+	case TOKEN_MINUS:    v->number.value = lhs->number.value - rhs->number.value;
+	case TOKEN_ASTERISK: v->number.value = lhs->number.value * rhs->number.value;
+	case TOKEN_SLASH:    v->number.value = lhs->number.value / rhs->number.value;
+	case TOKEN_MOD:      v->number.value = fmod(lhs->number.value, rhs->number.value);
+	case TOKEN_EQUALS:   v->number.value = lhs->number.value == rhs->number.value;
+	case TOKEN_LT:       v->number.value = lhs->number.value < rhs->number.value;
+	case TOKEN_LTE:      v->number.value = lhs->number.value <= rhs->number.value;
+	case TOKEN_GT:       v->number.value = lhs->number.value > rhs->number.value;
+	case TOKEN_GTE:      v->number.value = lhs->number.value >= rhs->number.value;
+	case TOKEN_NE:       v->number.value = lhs->number.value != rhs->number.value;
+	case TOKEN_LAND:     v->number.value = lhs->number.value && rhs->number.value;
+	case TOKEN_LOR:      v->number.value = lhs->number.value || rhs->number.value;
+	default: {
+		assert(!"Unimplemented binary op");
+	}
+	}
+	return v;
 }
 
 Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	switch (op) {
 	case TOKEN_PLUS: {
-		if (lhs->kind == VALUE_NUMBER) {
-			if (rhs->kind != VALUE_NUMBER) {
-				IncompletePath(); //TODO: Implement ir_error
+		if (isnumber(lhs)) {
+			if (!isnumber(rhs)) {
+				ir_error(ir, "Operator '%s' only work with numbers and strings.", token_kind_to_string(op));
 			}
 			Value *v = alloc_value(ir);
 			v->kind = VALUE_NUMBER;
@@ -524,127 +630,79 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 		}
 		else if(lhs->kind== VALUE_STRING) {
 			// If lhs is a string we concat multiple strings and conver the rhs if its a number
-			IncompletePath();
+			ir_error(ir, "String concatination is not yet implemented!");
 		}
 	} break;
-	case TOKEN_MINUS: {
-		//TODO: Error handling
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value - rhs->number.value;
-		return v;
-	} break;
-	case TOKEN_ASTERISK: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value * rhs->number.value;
-		return v;
-	} break;
-	case TOKEN_SLASH: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		//TODO: Check for zero and report the error, or just use NaN and roll with it
-		v->number.value = lhs->number.value / rhs->number.value;
-		return v;
-	} break;
+
+	case TOKEN_MINUS:
+	case TOKEN_ASTERISK:
+	case TOKEN_SLASH:
 	case TOKEN_MOD: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = fmod(lhs->number.value, rhs->number.value);
-		return v;
-	} break;
-	case TOKEN_EQUALS: {
-		if (lhs->kind == VALUE_STRING) {
-			assert(rhs->kind == VALUE_STRING);
-			Value *v = alloc_value(ir);
-			v->kind = VALUE_NUMBER;
-			v->number.value = strings_match(lhs->string.str, rhs->string.str);
-			return v;
+		if (!isnumber(lhs) || !isnumber(rhs)) {
+			ir_error(ir, "Operator '%s' is only allowed with numbers", token_kind_to_string(op));
 		}
 		else {
-			assert(lhs->kind == VALUE_NUMBER);
-			assert(rhs->kind == VALUE_NUMBER);
-			Value *v = alloc_value(ir);
-			v->kind = VALUE_NUMBER;
-			v->number.value = lhs->number.value == rhs->number.value;
-			return v;
+			return eval_number_op(ir, scope, op, lhs, rhs);
 		}
 	} break;
-	case TOKEN_LT: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value < rhs->number.value;
-		return v;
-	} break;
-	case TOKEN_LTE: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value <= rhs->number.value;
-		return v;
-	} break;
-	case TOKEN_GT: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value > rhs->number.value;
-		return v;
-	} break;
-	case TOKEN_GTE: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value >= rhs->number.value;
-		return v;
-	} break;
-	case TOKEN_NE: {
-		if (lhs->kind == VALUE_STRING) {
-			assert(rhs->kind == VALUE_STRING);
-			Value *v = alloc_value(ir);
-			v->kind = VALUE_NUMBER;
-			v->number.value = !strings_match(lhs->string.str, rhs->string.str);
-			return v;
-		}
-		else {
-			assert(lhs->kind == VALUE_NUMBER);
-			assert(rhs->kind == VALUE_NUMBER);
-			Value *v = alloc_value(ir);
-			v->kind = VALUE_NUMBER;
-			v->number.value = lhs->number.value != rhs->number.value;
-			return v;
-		}
-	} break;
-	case TOKEN_LAND: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		//TODO: Verify this works, perhaps convert the floats to integers
-		v->number.value = lhs->number.value && rhs->number.value;
-		return v;
-	} break;
+
+	case TOKEN_LT:
+	case TOKEN_LTE:
+	case TOKEN_GT:
+	case TOKEN_GTE:
+	case TOKEN_LAND:
 	case TOKEN_LOR: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
+		if (!isnumber(lhs) || !isnumber(rhs)) {
+			ir_error(ir, "Operator '%s' is only allowed with numbers", token_kind_to_string(op));
+		}
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		//TODO: Verify this works, perhaps convert the floats to integers
 		v->number.value = lhs->number.value || rhs->number.value;
 		return v;
 	} break;
+
+	case TOKEN_EQUALS: {
+		if (isstring(lhs)) {
+			if (!isstring(rhs)) {
+				ir_error(ir, "Cannot compare string to rhs!");
+			}
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = strings_match(lhs->string.str, rhs->string.str);
+			return v;
+		}
+		else {
+			if (!isnumber(lhs) || !isnumber(rhs)) {
+				ir_error(ir, "Operator '%s' only works with numbers and strings", token_kind_to_string(op));
+			}
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = lhs->number.value == rhs->number.value;
+			return v;
+		}
+	} break;
+	case TOKEN_NE: {
+		if (isstring(lhs)) {
+			if (!isstring(rhs)) {
+				ir_error(ir, "Can only compare strings with strings.");
+			}
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = !strings_match(lhs->string.str, rhs->string.str);
+			return v;
+		}
+		else {
+			if (!isnumber(lhs) || !isnumber(rhs)) {
+				ir_error(ir, "Operator '%s' only works with strings and numbers.", token_kind_to_string(op));
+			}
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = lhs->number.value != rhs->number.value;
+			return v;
+		}
+	} break;
+	
 	default: {
 		assert(!"Unhandled binop kind!");
 		exit(1);
@@ -667,8 +725,7 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 		return eval_binop(ir, scope, v->binary.op, lhs, rhs);
 	} break;
 	case VALUE_UNARY: {
-		Value *rhs = eval_value(ir, scope, v);
-		return eval_unary(ir, scope, v->unary.op, rhs);
+		return eval_unary(ir, scope, v->unary.op, v);
 	} break;
 	case VALUE_CALL: {
 		Value *func = eval_value(ir, scope, v->call.expr);
@@ -754,7 +811,6 @@ Value* expr_to_value(Ir *ir, Node *n) {
 	} break;
 	case NODE_CALL: {
 		Value *v = alloc_value(ir);
-		memset(v, 0, sizeof(Value));
 		v->kind = VALUE_CALL;
 		v->call.expr = expr_to_value(ir, n->call.expr);
 		if (n->call.args.size > 0) {

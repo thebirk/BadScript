@@ -386,11 +386,11 @@ Node* make_table(Parser *p, Token t, TableEntryArray entries) {
 }
 
 #ifdef _WIN32
-__declspec(noreturn) void parser_error
+__declspec(noreturn)
 #else
-__attribute__((noreturn)) void parser_error
+__attribute__((noreturn))
 #endif
-(Parser *parser, char *format, ...) {
+void parser_error(Parser *parser, char *format, ...) {
 	printf("%s(%lld, %lld): ", parser->lexer.file.str, parser->lexer.line, parser->lexer.offset);
 	va_list args;
 	va_start(args, format);

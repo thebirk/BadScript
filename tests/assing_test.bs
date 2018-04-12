@@ -1,0 +1,9 @@
+func f() {}
+
+var a = 123;
+
+func main(args) {
+	a = 321;
+	println(a);
+	f = 123;
+}

@@ -43,44 +43,44 @@ typedef enum TokenKind {
 
 char* token_kind_to_string(TokenKind kind) {
 	switch (kind) {
-		case TOKEN_UNKNOWN:      return "TOKEN_UNKNOWN";
-		case TOKEN_NUMBER:       return "TOKEN_NUMBER";
-		case TOKEN_IDENT:        return "TOKEN_IDENT";
-		case TOKEN_NULL:         return "TOKEN_NULL";
-		case TOKEN_FUNC:         return "TOKEN_FUNC";
-		case TOKEN_RETURN:       return "TOKEN_RETURN";
-		case TOKEN_CONTINUE:     return "TOKEN_CONTINUE";
-		case TOKEN_BREAK:        return "TOKEN_BREAK";
-		case TOKEN_VAR:          return "TOKEN_VAR";
-		case TOKEN_IF:           return "TOKEN_IF";
-		case TOKEN_ELSE:         return "TOKEN_ELSE";
-		case TOKEN_LEFTPAR:      return "TOKEN_LEFTPAR";
-		case TOKEN_RIGHTPAR:     return "TOKEN_RIGHTPAR";
-		case TOKEN_LEFTBRACE:    return "TOKEN_LEFTBRACE";
-		case TOKEN_RIGHTBRACE:   return "TOKEN_RIGHTBRACE";
-		case TOKEN_LEFTBRACKET:  return "TOKEN_LEFTBRACKET";
-		case TOKEN_RIGHTBRACKET: return "TOKEN_RIGHTBRACKET";
-		case TOKEN_EQUAL:        return "TOKEN_EQUAL";
-		case TOKEN_EQUALS:       return "TOKEN_EQUALS";
-		case TOKEN_PLUS:         return "TOKEN_PLUS";
-		case TOKEN_MINUS:        return "TOKEN_MINUS";
-		case TOKEN_SLASH:        return "TOKEN_SLASH";
-		case TOKEN_ASTERISK:     return "TOKEN_ASTERISK";
-		case TOKEN_MOD:          return "TOKEN_MOD";
-		case TOKEN_LT:           return "TOKEN_LT";
-		case TOKEN_GT:           return "TOKEN_GT";
-		case TOKEN_LTE:          return "TOKEN_LTE";
-		case TOKEN_GTE:          return "TOKEN_GTE";
-		case TOKEN_NE:           return "TOKEN_NE";
-		case TOKEN_COMMA:        return "TOKEN_COMMA";
-		case TOKEN_SEMICOLON:    return "TOKEN_SEMICOLON";
-		case TOKEN_FOR:          return "TOKEN_FOR";
-		case TOKEN_WHILE:        return "TOKEN_WHILE";
-		case TOKEN_STRING:       return "TOKEN_STRING";
-		case TOKEN_LAND:         return "TOKEN_LAND";
-		case TOKEN_LOR:          return "TOKEN_LOR";
-		case TOKEN_DOT:          return "TOKEN_DOT";
-		case TOKEN_EOF:          return "TOKEN_EOF";
+		case TOKEN_UNKNOWN:      return "(unknown)";
+		case TOKEN_NUMBER:       return "number";
+		case TOKEN_IDENT:        return "identifier";
+		case TOKEN_NULL:         return "null";
+		case TOKEN_FUNC:         return "func";
+		case TOKEN_RETURN:       return "return";
+		case TOKEN_CONTINUE:     return "continue";
+		case TOKEN_BREAK:        return "break";
+		case TOKEN_VAR:          return "var";
+		case TOKEN_IF:           return "if";
+		case TOKEN_ELSE:         return "else";
+		case TOKEN_LEFTPAR:      return "(";
+		case TOKEN_RIGHTPAR:     return ")";
+		case TOKEN_LEFTBRACE:    return "{";
+		case TOKEN_RIGHTBRACE:   return "}";
+		case TOKEN_LEFTBRACKET:  return "[";
+		case TOKEN_RIGHTBRACKET: return "]";
+		case TOKEN_EQUAL:        return "=";
+		case TOKEN_EQUALS:       return "==";
+		case TOKEN_PLUS:         return "+";
+		case TOKEN_MINUS:        return "-";
+		case TOKEN_SLASH:        return "/";
+		case TOKEN_ASTERISK:     return "*";
+		case TOKEN_MOD:          return "%";
+		case TOKEN_LT:           return "<";
+		case TOKEN_GT:           return ">";
+		case TOKEN_LTE:          return "<=";
+		case TOKEN_GTE:          return ">=";
+		case TOKEN_NE:           return "!=";
+		case TOKEN_COMMA:        return ",";
+		case TOKEN_SEMICOLON:    return ";";
+		case TOKEN_FOR:          return "for";
+		case TOKEN_WHILE:        return "while";
+		case TOKEN_STRING:       return "string";
+		case TOKEN_LAND:         return "&&";
+		case TOKEN_LOR:          return "||";
+		case TOKEN_DOT:          return ".";
+		case TOKEN_EOF:          return "(end of file)";
 
 		default: return "(unimplemented TokenKind name)";
 	}
@@ -111,11 +111,11 @@ typedef struct Lexer {
 } Lexer;
 
 #ifdef _WIN32
-__declspec(noreturn) void lexer_error
+__declspec(noreturn)
 #else
-__attribute__((noreturn)) void lexer_error
+__attribute__((noreturn))
 #endif
-(Lexer *lexer, char *format, ...) {
+void lexer_error(Lexer *lexer, char *format, ...) {
 	printf("%s(%lld, %lld): ", lexer->file.str, lexer->line, lexer->offset);
 	va_list args;
 	va_start(args, format);
