@@ -1,0 +1,31 @@
+func c() {
+	return 321;
+}
+
+func d() {
+	return "not a number";
+}
+
+func compare(a, b) {
+	if type(a) == type(b) {
+		print("a and b are the same type");
+	} else {
+		print("a and b are not the same type");
+	}
+}
+
+func main(args) {
+	var a = 123;
+	var b = c();
+	compare(a, b);
+	
+	print();
+	
+	b = d();
+	compare(a, b);
+	
+	print();
+	
+	b = c();
+	compare(a, b);
+}

@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 		init_parser(&p, argv[1]);
 	}
 	else {
-		char *path = "minimal.bs";
+		char *path = "tests/strings.bs";
 		printf("Parsing: %s\n", path);
 		init_parser(&p, path);
 	}

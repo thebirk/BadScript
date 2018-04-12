@@ -212,6 +212,13 @@ Value* alloc_value(Ir *ir) {
 	//return &ir->value_memory.data[ir->value_memory.size - 1];
 }
 
+Value* make_string_value(Ir *ir, String str) {
+	Value *v = alloc_value(ir);
+	v->kind = VALUE_STRING;
+	v->string.str = str;
+	return v;
+}
+
 Stmt* alloc_stmt(Ir *ir) {
 	return calloc(1, sizeof(Stmt));
 }
@@ -269,9 +276,11 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		memset(stmt, 0, sizeof(Stmt)); // Clear so that we can use the array
 		stmt->kind = STMT_CALL;
 		stmt->call.expr = expr_to_value(ir, n->call.expr);
-		Node *arg;
-		for_array(n->call.args, arg) {
-			array_add(stmt->call.args, expr_to_value(ir, arg));
+		if (n->call.args.size > 0) {
+			Node *arg;
+			for_array(n->call.args, arg) {
+				array_add(stmt->call.args, expr_to_value(ir, arg));
+			}
 		}
 		return stmt;
 	} break;
@@ -387,9 +396,12 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		Value *func = eval_value(ir, scope, stmt->call.expr);
 		assert(func->kind == VALUE_FUNCTION); //TODO: Can we call other stuff
 		ValueArray args = { 0 };
-		Value *arg;
-		for_array(stmt->call.args, arg) {
-			array_add(args, eval_value(ir, scope, arg));
+		if (stmt->call.args.size > 0) {
+			Value *arg;
+			for_array(stmt->call.args, arg) {
+				Value *v = eval_value(ir, scope, arg);
+				array_add(args, v);
+			}
 		}
 		call_function(ir, func, args);
 	} break;
@@ -543,12 +555,21 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 		return v;
 	} break;
 	case TOKEN_EQUALS: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value == rhs->number.value;
-		return v;
+		if (lhs->kind == VALUE_STRING) {
+			assert(rhs->kind == VALUE_STRING);
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = strings_match(lhs->string.str, rhs->string.str);
+			return v;
+		}
+		else {
+			assert(lhs->kind == VALUE_NUMBER);
+			assert(rhs->kind == VALUE_NUMBER);
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = lhs->number.value == rhs->number.value;
+			return v;
+		}
 	} break;
 	case TOKEN_LT: {
 		assert(lhs->kind == VALUE_NUMBER);
@@ -583,12 +604,21 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 		return v;
 	} break;
 	case TOKEN_NE: {
-		assert(lhs->kind == VALUE_NUMBER);
-		assert(rhs->kind == VALUE_NUMBER);
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		v->number.value = lhs->number.value != rhs->number.value;
-		return v;
+		if (lhs->kind == VALUE_STRING) {
+			assert(rhs->kind == VALUE_STRING);
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = !strings_match(lhs->string.str, rhs->string.str);
+			return v;
+		}
+		else {
+			assert(lhs->kind == VALUE_NUMBER);
+			assert(rhs->kind == VALUE_NUMBER);
+			Value *v = alloc_value(ir);
+			v->kind = VALUE_NUMBER;
+			v->number.value = lhs->number.value != rhs->number.value;
+			return v;
+		}
 	} break;
 	case TOKEN_LAND: {
 		assert(lhs->kind == VALUE_NUMBER);
@@ -637,9 +667,12 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 		Value *func = eval_value(ir, scope, v->call.expr);
 		assert(func->kind == VALUE_FUNCTION);
 		ValueArray args = { 0 };
-		Value *arg;
-		for_array(v->call.args, arg) {
-			array_add(args, eval_value(ir, scope, arg));
+		if (v->call.args.size > 0) {
+			Value *arg;
+			for_array(v->call.args, arg) {
+				Value *v = eval_value(ir, scope, arg);
+				array_add(args, v);
+			}
 		}
 		return call_function(ir, func, args);
 	} break;
@@ -717,9 +750,11 @@ Value* expr_to_value(Ir *ir, Node *n) {
 		memset(v, 0, sizeof(Value));
 		v->kind = VALUE_CALL;
 		v->call.expr = expr_to_value(ir, n->call.expr);
-		Node *arg;
-		for_array(n->call.args, arg) {
-			array_add(v->call.args, expr_to_value(ir, arg));
+		if (n->call.args.size > 0) {
+			Node *arg;
+			for_array(n->call.args, arg) {
+				array_add(v->call.args, expr_to_value(ir, arg));
+			}
 		}
 		return v;
 	} break;

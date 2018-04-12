@@ -1,0 +1,7 @@
+func main(args) {
+	print(type(1));
+	print(type("string"));
+	print(type(null));
+	print(type(main));
+	// print(type({})); // We dont have these yet
+}

@@ -31,6 +31,8 @@ func main(args) {
 	print("Recursive: ", factorial_recursive(5));
 	print("Iterative: ", factorial_iterative(5));
 	print_even_numbers(1, 100);
+	var alias = print_even_numbers;
+	alias(2, 8); // Sure aliases are nice, but if we can overwrite them thats just stupid
 	
 	// msgbox("This is a very important message!", "Hey you!");
 }
