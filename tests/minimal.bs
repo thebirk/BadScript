@@ -19,17 +19,17 @@ func factorial_iterative(n) {
 
 func print_even_numbers(first, last) {
 	var i = first;
-	while(i <= last) {
+	while i <= last {
 		if (i % 2) == 0 {
-			print(i, " is even!");
+			println(i, " is even!");
 		}
 		i = i + 1;
 	}
 }
 
 func main(args) {
-	print("Recursive: ", factorial_recursive(5));
-	print("Iterative: ", factorial_iterative(5));
+	println("Recursive: ", factorial_recursive(5));
+	println("Iterative: ", factorial_iterative(5));
 	print_even_numbers(1, 100);
 	var alias = print_even_numbers;
 	alias(2, 8); // Sure aliases are nice, but if we can overwrite them thats just stupid

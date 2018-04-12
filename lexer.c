@@ -152,8 +152,8 @@ void add_token(Lexer *lexer, Token t) {
 	array_add(lexer->tokens, t);
 }
 
-void init_lexer(Lexer *lexer, char *path) {
-	lexer->file = make_string_slow(path);
+void init_lexer(Lexer *lexer, String path) {
+	lexer->file = path;
 	lexer->line = 1;
 	lexer->offset = 1;
 	read_entire_file(lexer, lexer->file);
@@ -388,7 +388,7 @@ void lex(Lexer *lexer) {
 
 void lexer_test() {
 	Lexer lexer = { 0 };
-	init_lexer(&lexer, "test.bd");
+	init_lexer(&lexer, string("test.bd"));
 	lex(&lexer);
 
 	Token *t;

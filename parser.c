@@ -129,7 +129,7 @@ void init_parser_common(Parser *p) {
 	array_init(p->nodes, 32);
 }
 
-void init_parser(Parser *p, char *path) {
+void init_parser(Parser *p, String path) {
 	init_lexer(&p->lexer, path);
 	init_parser_common(p);
 }

@@ -18,7 +18,67 @@
 #include "ir.c"
 #include "runtime.c"
 
+void print_usage(char *binary_name) {
+	printf("Usage: %s [options] <script>\n", binary_name);
+	printf("\nOptions:\n");
+	printf("\t-timings - prints timing information\n");
+	printf("\t-silent  - Suppresses all output\n");
+}
+
 int main(int argc, char **argv) {
+	bool print_timings = false;
+	bool silence = false;
+	char* binary_name = argv[0];
+
+	String filename = {0};
+	for (size_t i = 1; i < argc; i++) {
+		char *arg = argv[i];
+		if (*arg == '-') {
+			char *name = arg+1;
+
+			if (strcmp(name, "timings") == 0) {
+				print_timings = true;
+			}
+			else if (strcmp(name, "silent") == 0) {
+				silence = true;
+			}
+			else {
+				printf("Unknown option '%s'!\n", name);
+				print_usage(binary_name);
+				exit(1);
+			}
+		}
+		else {
+			if (filename.str) {
+				printf("More than one file was provided\n");
+				print_usage(binary_name);
+				exit(1);
+			}
+			else {
+				filename = make_string_slow(arg);
+			}
+		}
+	}
+	if (filename.str == 0) {
+		printf("No file was provided!\n");
+		print_usage(argv[0]);
+		exit(1);
+	}
+	if (argc == 1) {
+		filename = make_string_slow("tests/strings.bs");
+		printf("Parsing: %s\n", filename.str);
+	}
+
+	if (silence) {
+#if _WIN32
+		freopen("nul", "w", stdout);
+		freopen("nul", "w", stderr);
+#else
+		freopen("/dev/null", "w", stdout);
+		freopen("/dev/null", "w", stderr);
+#endif
+	}
+
 	Timings t = {0};
 	timings_init(&t, make_string_slow("total time"));
 
@@ -26,14 +86,7 @@ int main(int argc, char **argv) {
 	timings_start_section(&t, make_string_slow("lexer"));
 	Parser p = (Parser){0};
 	memset(&p, 0, sizeof(Parser));
-	if (argc > 1) {
-		init_parser(&p, argv[1]);
-	}
-	else {
-		char *path = "tests/strings.bs";
-		printf("Parsing: %s\n", path);
-		init_parser(&p, path);
-	}
+	init_parser(&p, filename);
 	timings_start_section(&t, make_string_slow("parser"));
 	NodeArray stmts = parse(&p);
 
@@ -46,8 +99,11 @@ int main(int argc, char **argv) {
 	Value *return_value = ir_run(&ir);
 
 	//TODO: Make timings optional and dont print newline if we dont print timings
-	printf("\n");
-	timings_print_all(&t, TimingUnit_Millisecond);
+	if (print_timings) {
+		printf("\n");
+		timings_print_all(&t, TimingUnit_Millisecond);
+	}
+	
 	
 	if (return_value->kind == VALUE_NUMBER) {
 		return return_value->number.value;

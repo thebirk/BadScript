@@ -8,9 +8,9 @@ func d() {
 
 func compare(a, b) {
 	if type(a) == type(b) {
-		print("a and b are the same type");
+		println("a and b are the same type");
 	} else {
-		print("a and b are not the same type");
+		println("a and b are not the same type");
 	}
 }
 
@@ -19,12 +19,12 @@ func main(args) {
 	var b = c();
 	compare(a, b);
 	
-	print();
+	println();
 	
 	b = d();
 	compare(a, b);
 	
-	print();
+	println();
 	
 	b = c();
 	compare(a, b);
