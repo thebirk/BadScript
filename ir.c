@@ -143,7 +143,7 @@ struct Scope {
 };
 
 Scope* alloc_scope(Ir *ir) {
-	return malloc(sizeof(Scope));
+	return calloc(1, sizeof(Scope));
 }
 
 Scope* make_scope(Ir *ir, Scope *parent) {
@@ -155,6 +155,7 @@ Scope* make_scope(Ir *ir, Scope *parent) {
 	return scope;
 }
 
+// Gets a symbol traveling up through the scope to find it
 Value* scope_get(Ir *ir, Scope *scope, String name) {
 	Value *v;
 	if (hashmap_get(scope->symbols, name.str, &v) == MAP_MISSING) {
@@ -168,25 +169,51 @@ Value* scope_get(Ir *ir, Scope *scope, String name) {
 	return v;
 }
 
-void scope_put(Ir* ir, Scope *scope, String name, Value *v) {
-	hashmap_put(scope->symbols, name.str, v);
+// Adds to current 
+void scope_add(Ir* ir, Scope *scope, String name, Value *v) {
+	Value *test = 0;
+	hashmap_get(scope->symbols, name.str, &test);
+	if (test) {
+		assert(!"Symbol name already exists!"); //TODO: Error!
+	}
+	else {
+		hashmap_put(scope->symbols, name.str, v);
+	}
+}
+
+// Updates a symbol, seach up through the scope
+void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
+	Value *test = 0;
+	hashmap_get(scope->symbols, name.str, &test);
+	if (test) {
+		hashmap_put(scope->symbols, name.str, v);
+	}
+	else {
+		if (scope->parent) {
+			scope_set(ir, scope->parent, name, v);
+		}
+		else {
+			assert(!"Trying to set non-existent symbole!"); //TODO: Error message
+		}
+	}
 }
 
 typedef Array(Value) ValueMemory;
-typedef struct Ir {
+struct Ir {
 	ValueMemory value_memory;
 	Scope *global_scope;
 	Scope *file_scope;
-} Ir;
+};
 
 Value* alloc_value(Ir *ir) {
-	Value v = { 0 };
-	array_add(ir->value_memory, v);
-	return &ir->value_memory.data[ir->value_memory.size - 1];
+	return calloc(1, sizeof(Value));
+	//Value v = { 0 };
+	//array_add(ir->value_memory, v);
+	//return &ir->value_memory.data[ir->value_memory.size - 1];
 }
 
 Stmt* alloc_stmt(Ir *ir) {
-	return malloc(sizeof(Stmt));
+	return calloc(1, sizeof(Stmt));
 }
 
 StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes);
@@ -246,7 +273,9 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		stmt->kind = STMT_IF;
 		stmt->_if.cond = expr_to_value(ir, n->_if.cond);
 		stmt->_if.if_block = convert_node_to_stmt(ir, n->_if.block);
-		stmt->_if.else_block = convert_node_to_stmt(ir, n->_if.else_block);
+		if(stmt->_if.else_block) {
+			stmt->_if.else_block = convert_node_to_stmt(ir, n->_if.else_block);
+		}
 		return stmt;
 	} break;
 	case NODE_WHILE: {
@@ -280,7 +309,7 @@ void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
 		switch (n->kind) {
 		case NODE_VAR: {
 			Value *v = expr_to_value(ir, n->var.expr);
-			scope_put(ir, ir->file_scope, n->var.name, v);
+			scope_add(ir, ir->file_scope, n->var.name, v);
 		} break;
 		case NODE_FUNC: {
 			Value *v = alloc_value(ir);
@@ -291,7 +320,7 @@ void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
 			f->normal.arg_names = n->func.args;
 			f->normal.stmts = convert_nodes_to_stmts(ir, n->func.block->block.stmts);
 
-			scope_put(ir, ir->file_scope, n->func.name, v);
+			scope_add(ir, ir->file_scope, n->func.name, v);
 		} break;
 		default: {
 			assert(!"Unhandled top level to ir");
@@ -328,7 +357,7 @@ Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 }
 
 void add_globals(Ir *ir) {
-	scope_put(ir, ir->global_scope, string("print"), make_native_function(ir, global_print));
+	scope_add(ir, ir->global_scope, string("print"), make_native_function(ir, global_print));
 }
 
 void init_ir(Ir *ir, NodeArray stmts) {
@@ -346,23 +375,23 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v);
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	switch (stmt->kind) {
 	case STMT_VAR: {
-		scope_put(ir, scope, stmt->var.name, stmt->var.expr);
+		scope_add(ir, scope, stmt->var.name, stmt->var.expr);
 	} break;
 	case STMT_RETURN: {
 		*return_value = eval_value(ir, scope, stmt->ret.expr);
 		return true;
 	} break;
 	case STMT_ASSIGN: {
-		Value *lhs = eval_value(ir, scope, stmt->assign.left);
+		Value *lhs = stmt->assign.left;
+		if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
+			// Error not supported assignemtn or something else?
+			lhs = eval_value(ir, scope, stmt->assign.left);
+		}
 		Value *rhs = eval_value(ir, scope, stmt->assign.right);
 
 		switch (lhs->kind) {
 		case VALUE_NAME: {
-			Value *var = scope_get(ir, scope, lhs->name.name);
-			if (!var) {
-				assert(!"Variable does not exist");
-			}
-			scope_put(ir, scope, lhs->name.name, rhs);
+			scope_set(ir, scope, lhs->name.name, rhs);
 		} break;
 		case VALUE_FIELD: {
 			IncompletePath();
@@ -398,7 +427,9 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		assert(cond->kind == TOKEN_NUMBER || cond->kind == TOKEN_NULL);
 		if (cond->kind == TOKEN_NULL || cond->number.value == 0.0) {
 			// else
-			return eval_stmt(ir, scope, stmt->_if.else_block, return_value);
+			if (stmt->_if.else_block) {
+				return eval_stmt(ir, scope, stmt->_if.else_block, return_value);
+			}
 		}
 		else {
 			// true
@@ -410,7 +441,8 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		//TODO: Better error like function/string etc cant be used as boolean
 		assert(cond->kind == TOKEN_NUMBER || cond->kind == TOKEN_NULL);
 		while (cond->kind != TOKEN_NULL && cond->number.value != 0) {
-			return eval_stmt(ir, scope, stmt->_while.block, return_value);
+			bool returned = eval_stmt(ir, scope, stmt->_while.block, return_value);
+			if (returned) return returned;
 			cond = eval_value(ir, scope, stmt->_while.cond);
 		}
 	} break;
@@ -418,7 +450,8 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		Scope *block_scope = make_scope(ir, scope);
 		Stmt *block_stmt;
 		for_array(stmt->block.stmts, block_stmt) {
-			return eval_stmt(ir, block_scope, block_stmt, return_value);
+			bool returned = eval_stmt(ir, block_scope, block_stmt, return_value);
+			if (returned) return returned;
 		}
 	} break;
 	default: {
@@ -439,7 +472,7 @@ Value* eval_function(Ir *ir, Function func, ValueArray args) {
 	assert(func.normal.arg_names.size == args.size);
 	Scope *scope = make_scope(ir, ir->file_scope);
 	for (int i = 0; i < args.size; i++) {
-		scope_put(ir, scope, func.normal.arg_names.data[i], args.data[i]);
+		scope_add(ir, scope, func.normal.arg_names.data[i], args.data[i]);
 	}
 	Stmt *stmt;
 	for_array(func.normal.stmts, stmt) {
@@ -494,7 +527,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	case TOKEN_MINUS: {
 		//TODO: Error handling
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value - rhs->number.value;
@@ -502,7 +535,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_ASTERISK: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value * rhs->number.value;
@@ -510,7 +543,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_SLASH: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		//TODO: Check for zero and report the error, or just use NaN and roll with it
@@ -519,7 +552,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_MOD: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = fmod(lhs->number.value, rhs->number.value);
@@ -527,7 +560,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_EQUALS: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value == rhs->number.value;
@@ -535,7 +568,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_LT: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value < rhs->number.value;
@@ -543,7 +576,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_LTE: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value <= rhs->number.value;
@@ -551,7 +584,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_GT: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value > rhs->number.value;
@@ -559,7 +592,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_GTE: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value >= rhs->number.value;
@@ -567,7 +600,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_NE: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		v->number.value = lhs->number.value != rhs->number.value;
@@ -575,7 +608,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_LAND: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		//TODO: Verify this works, perhaps convert the floats to integers
@@ -584,7 +617,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	} break;
 	case TOKEN_LOR: {
 		assert(lhs->kind == VALUE_NUMBER);
-		assert(lhs->kind == VALUE_NUMBER);
+		assert(rhs->kind == VALUE_NUMBER);
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NUMBER;
 		//TODO: Verify this works, perhaps convert the floats to integers
@@ -618,6 +651,7 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 	} break;
 	case VALUE_CALL: {
 		Value *func = eval_value(ir, scope, v->call.expr);
+		assert(func->kind == VALUE_FUNCTION);
 		ValueArray args = { 0 };
 		Value *arg;
 		for_array(v->call.args, arg) {

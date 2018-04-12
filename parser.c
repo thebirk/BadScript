@@ -141,10 +141,10 @@ void init_parser_from_string(Parser *p, char *str) {
 
 Node* alloc_node(Parser *p) {
 	//TODO: Implement arena allocator
-	//return malloc(sizeof(Node));
-	Node n = { 0 };
-	array_add(p->nodes, n);
-	return (Node*)&p->nodes.data[p->nodes.size-1];
+	return calloc(1, sizeof(Node));
+	//Node n = { 0 };
+	//array_add(p->nodes, n);
+	//return (Node*)&p->nodes.data[p->nodes.size-1];
 }
 
 Node* make_number(Parser *p, Token number) {

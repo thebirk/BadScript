@@ -1,11 +1,33 @@
-func factorial_recursive(i) {
-	if i == 1 {
+func factorial_recursive(n) {
+	if n == 1 {
 		return 1;
 	} else {
-		return i * factorial_recursive(i-1);
+		return n * factorial_recursive(n-1);
+	}
+}
+
+func factorial_iterative(n) {
+	var r = 1;
+	var i = 2;
+	while i <= n {
+		r = r * i;
+		i = i + 1;
+	}
+	return r;
+}
+
+func print_even_numbers(first, last) {
+	var i = first;
+	while(i < last) {
+		if (i % 2) == 0 {
+			print(i, " is even!");
+		}
+		i = i + 1;
 	}
 }
 
 func main(args) {
-	print(factorial_recursive(5));
+	print("Recursive: ", factorial_recursive(5));
+	print("Iterative: ", factorial_iterative(5));
+	print_even_numbers(1, 100);
 }
