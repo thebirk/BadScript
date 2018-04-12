@@ -107,5 +107,6 @@ Converts a string to a number. Returns null if str doesnt represent a number
 
 #### Example
 ```lua
-
+var a = str2num(2);
+a == 2;
 ```
