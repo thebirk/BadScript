@@ -95,6 +95,109 @@ typedef Array(String) StringArray;
 	} \
 } while(0)
 
+typedef struct MapEntry {
+	void *key;
+	void *val;
+	uint64_t hash;
+} MapEntry;
+
+// Taken from - https://github.com/pervognsen/bitwise/blob/master/ion/common.c
+// NOTE: The zero key is reserved as null, thats why we do len < cap and not len <= cap
+typedef struct Map{
+	MapEntry *entries;
+	size_t len;
+	size_t cap;
+} Map;
+
+uint64_t hash_uint64(uint64_t v) {
+	v *= 0xff51afd7ed558ccd;
+	v ^= v >> 32;
+	return v;
+}
+
+uint64_t hash_ptr(void *ptr) {
+	return hash_uint64((uintptr_t)ptr);
+}
+
+uint64_t hash_bytes(const char *buf, size_t len) {
+	uint64_t x = 0xcbf29ce484222325;
+	for (size_t i = 0; i < len; i++) {
+		x ^= buf[i];
+		x *= 0x100000001b3;
+		x ^= x >> 32;
+	}
+	return x;
+}
+
+#define IS_POW2(x) (((x) != 0) && ((x) & ((x)-1)) == 0)
+void* map_get(Map *map, uint64_t hash) {
+	if (map->len == 0) return 0;
+
+	assert(IS_POW2(map->cap));
+	assert(map->len < map->cap);
+
+	uint64_t i = hash;
+	for (;;) {
+		i &= map->cap - 1;
+		MapEntry *entry = &map->entries[i];
+		if (entry->hash == hash) {
+			return entry->val;
+		}
+		else if (!entry->hash) {
+			return 0;
+		}
+		i++;
+	}
+
+	return 0;
+}
+
+void map_put_hash(Map *map, uint64_t hash, void *key, void *val);
+void map_grow(Map *map, size_t new_cap) {
+	new_cap = max(16, new_cap);
+	Map new_map = {
+		.entries = calloc(new_cap, sizeof(MapEntry)),
+		.cap = new_cap,
+	};
+
+	for (size_t i = 0; i < map->cap; i++) {
+		MapEntry *e = &map->entries[i];
+		if (e->key) {
+			map_put_hash(map, e->hash, e->key, e->val);
+		}
+	}
+
+	free(map->entries);
+	*map = new_map;
+}
+
+//TODO: Do string interning and remove c_hashmap completly
+void map_put_hash(Map *map, uint64_t hash, void *key, void *val) {
+	assert(key);
+	assert(val);
+	if (2 * map->len >= map->cap) {
+		map_grow(map, 2 * map->cap);
+	}
+
+	assert(2 * map->len < map->cap);
+	assert(IS_POW2(map->cap));
+	size_t i = (size_t)hash;
+	for (;;) {
+		i &= map->cap - 1;
+		MapEntry *e = &map->entries[i];
+		if (!e->key) {
+			map->len++;
+			e->key = key;
+			e->val = val;
+			e->hash = hash;
+			return;
+		}
+		else if (e->hash == hash) {
+			e->val = val;
+			return;
+		}
+	}
+}
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN

@@ -74,9 +74,7 @@ struct Value {
 			String str;
 		} string;
 		struct {
-			ValueArray array; // For 1, 2, 3, etc.
-			//TODO: 100 = 5 should expand the array and set 5, do we want to support this?
-			map_t keytable; // for "something" = 123
+			Map map;
 		} table;
 		Function func;
 		struct {
@@ -197,7 +195,7 @@ void scope_add(Ir* ir, Scope *scope, String name, Value *v) {
 	Value *test = 0;
 	hashmap_get(scope->symbols, name.str, &test);
 	if (test) {
-		assert(!"Symbol name already exists!"); //TODO: Error!
+		ir_error(ir, "Symbol '%.*s' already exists in this scope!", (int)name.len, name.str);
 	}
 	else {
 		hashmap_put(scope->symbols, name.str, v);
@@ -229,7 +227,7 @@ void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
 			scope_set(ir, scope->parent, name, v);
 		}
 		else {
-			assert(!"Trying to set non-existent symbole!"); //TODO: Error message
+			ir_error(ir, "Symbol '%*.s' does not exist.", (int)name.len, name.str);
 		}
 	}
 }
@@ -420,6 +418,12 @@ void init_ir(Ir *ir, NodeArray stmts) {
 	add_globals(ir);
 }
 
+void ir_import_file(Ir *ir, String path) {
+	Parser p;
+	memset(&p, 0, sizeof(Parser));
+
+}
+
 Value* call_function(Ir *ir, Value *func_value, ValueArray args);
 Value* eval_value(Ir *ir, Scope *scope, Value *v);
 // True if we had a return,break,continue, etc
@@ -457,8 +461,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 			IncompletePath();
 		} break;
 		default: {
-			assert(!"Cant assign to whatever lhs is!");
-			exit(1);
+			ir_error(ir, "Cannot assign to left hand");
 		} break;
 		}
 	} break;
@@ -483,8 +486,9 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	} break;
 	case STMT_IF: {
 		Value *cond = eval_value(ir, scope, stmt->_if.cond);
-		//TODO: Better error like function/string etc cant be used as boolean
-		assert(cond->kind == TOKEN_NUMBER || cond->kind == TOKEN_NULL);
+		if (!isnumber(cond) && !isnull(cond)) {
+			ir_error(ir, "Condition does not evaluate to number or null.");
+		}
 		if (cond->kind == TOKEN_NULL || cond->number.value == 0.0) {
 			// else
 			if (stmt->_if.else_block) {
@@ -498,12 +502,18 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	} break;
 	case STMT_WHILE: {
 		Value *cond = eval_value(ir, scope, stmt->_while.cond);
-		//TODO: Better error like function/string etc cant be used as boolean
-		assert(cond->kind == TOKEN_NUMBER || cond->kind == TOKEN_NULL);
+		if (!isnumber(cond) && !isnull(cond)) {
+			ir_error(ir, "Condition does not evaluate to number or null.");
+		}
+
 		while (cond->kind != TOKEN_NULL && cond->number.value != 0) {
 			bool returned = eval_stmt(ir, scope, stmt->_while.block, return_value);
 			if (returned) return returned;
+			
 			cond = eval_value(ir, scope, stmt->_while.cond);
+			if (!isnumber(cond) || !isnull(cond)) {
+				ir_error(ir, "Condition does not evaluate to number or null.");
+			}
 		}
 	} break;
 	case STMT_BLOCK: {
@@ -531,8 +541,9 @@ Value* eval_function(Ir *ir, Function func, ValueArray args) {
 	// Eval all stmts
 	Value *return_value = null_value;
 
-	assert(func.normal.arg_names.size == args.size);
-
+	if (func.normal.arg_names.size != args.size) {
+		ir_error(ir, "Argument count mismatch! Wanted %d got %d.", (int)func.normal.arg_names.size, (int)args.size);
+	}
 
 	if (func.normal.stmts.size > 0) {
 		Scope *scope = make_scope(ir, ir->file_scope);
@@ -716,7 +727,7 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 	switch (v->kind) {
 	case VALUE_NAME: {
 		Value *var = scope_get(ir, scope, v->name.name);
-		assert(var);//TODO: Error message
+		assert(var); // scope_get should complain about missing symbols
 		return eval_value(ir, scope, var);
 	} break;
 	case VALUE_BINOP: {
@@ -753,6 +764,44 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 	}
 }
 
+uint64_t hash_value(Ir *ir, Value *v) {
+	switch (v->kind) {
+	case VALUE_NULL: return hash_ptr(null_value);
+	case VALUE_NUMBER: {
+		uint64_t num = 0;
+		memcpy(&num, &v->number.value, 8);
+		return hash_uint64(num);
+	}
+	case VALUE_STRING: {
+		return hash_bytes(v->string.str.str, v->string.str.len);
+	}
+	case VALUE_TABLE: {
+		ir_error(ir, "A table cannot be used an index");
+	}
+	case VALUE_NAME: {
+		return hash_bytes(v->name.name.str, v->name.name.len);
+	}
+	default: {
+		assert(!"Unimplemented hash_value case");
+		exit(1);
+	} break;
+	}
+}
+
+void table_put(Ir *ir, Value *table, Value *key, Value *val) {
+	assert(table);
+	assert(key);
+	assert(val);
+
+	map_put_hash(&table->table.map, hash_value(ir, key), key, val);
+}
+
+Value* table_get(Ir *ir, Value *table, Value *key) {
+	uint64_t hash = hash_value(ir, key);
+	return map_get(&table->table.map, hash);
+}
+
+
 Value* expr_to_value(Ir *ir, Node *n) {
 	switch (n->kind) {
 	case NODE_NULL: {
@@ -778,7 +827,31 @@ Value* expr_to_value(Ir *ir, Node *n) {
 		return v;
 	} break;
 	case NODE_TABLE: {
-		IncompletePath();
+		Value *v = alloc_value(ir);
+		v->kind = VALUE_TABLE;
+
+		if (n->table.entries.size > 0) {
+			size_t normal_offset = 0;
+			TableEntry *entry;
+			for_array_ref(n->table.entries, entry) {
+				switch (entry->kind) {
+				case ENTRY_KEY: {
+					Value *key = expr_to_value(ir, entry->key);
+					Value *val = expr_to_value(ir, entry->expr);
+					table_put(ir, );
+				} break;
+				case ENTRY_NORMAL: {
+
+				} break;
+				default: {
+					assert(!"Invalid TableEntry kind. Uh oh");
+					exit(1);
+				} break;
+				}
+			}
+		}
+		
+		return v;
 	} break;
 	case NODE_BINOP: {
 		Value *v = alloc_value(ir);

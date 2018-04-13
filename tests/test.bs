@@ -9,15 +9,17 @@ func add(a, b) {
 
 func main(args) {
 	var map = {
-		1 = 123,
-		"name" = 123,
+		[c] = "string", // [123*321] = "string"
+		a = 321,        // ["a"]     = 321
+		1 = 123,        // [1]       = 123
+		"name" = 123,   // ["name"]  = 123
 	};
 
     var k;
     // is the same as
     var l = null;
 
-
+	
 	map["name"] = map.name + 1;
 
 	if a == 123.25 {

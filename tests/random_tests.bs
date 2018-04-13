@@ -1,3 +1,11 @@
+func zero() {
+	println("zero args");
+}
+
+func two(a, b) {
+	println(a, b);
+}
+
 func main(args) {
 	println(-1);
 	println(+1);
@@ -5,8 +13,19 @@ func main(args) {
 	println(-num);
 	println(-str2num("-321"));
 	
+	zero();
+	two("Hello, ", "world!");
+	
 	// the above should run
-	// below shuld error
+	// the following should error
+	
+	//two();
+	//zero(1);
+	
+	/*
+	var a = "string";
+	if a {println("This should not run!");}
+	*/
 	
 	//println("dfdfg" < "sdf");
 	//println(-"wut?");

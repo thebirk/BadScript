@@ -472,6 +472,9 @@ Node* expr_operand(Parser *p) {
 				break;
 			}
 
+			// If we have a [ parse an index
+			// In ir.c have a value called TABLE_CONSTANT
+			// This will then eval into a proper TABLE
 			Node *expr = parse_expr(p);
 
 			if (match_token(p, TOKEN_EQUAL)) {
