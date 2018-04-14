@@ -6,7 +6,7 @@ func f() {
 func main(args) {
 	var table = {
 		f(), test = 321, "test" = 444,
-		[12] = "Hello, world!"
+		[12] = "Hello, world!",
 	};
 	println("table[0]        = ", table[0]);
 	println("table[''test''] = ", table["test"]);

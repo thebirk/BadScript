@@ -11,6 +11,8 @@ typedef Array(Value*) ValueArray;
 typedef struct Stmt Stmt;
 typedef Array(Stmt*) StmtArray;
 
+Value* eval_value(Ir *ir, Scope *scope, Value *v);
+
 #ifdef _WIN32
 __declspec(noreturn)
 #else
@@ -236,13 +238,45 @@ void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
 	}
 }
 
+typedef struct StackCall {
+	SourceLoc loc;
+	Value *expr;
+	FunctionKind kind;
+} StackCall;
+typedef Array(StackCall) CallStack;
+
 typedef Array(Value) ValueMemory;
 struct Ir {
 	SourceLoc loc;
 	ValueMemory value_memory;
 	Scope *global_scope;
 	Scope *file_scope;
+	CallStack callstack;
 };
+
+void print_stacktrace(Ir *ir) {
+	assert(ir->callstack.size);
+	printf("Stack trace (most recent call at top)\n");
+	StackCall *c;
+	for_array_ref(ir->callstack, c) {
+		char *type = "";
+		if (c->kind == FUNCTION_NATIVE) {
+			type = "native:";
+		}
+		else if (c->kind == FUNCTION_FFI) {
+			type = "ffi:";
+		}
+		printf("  %d\t- %s(%.*s:%d)\n", (int)it_index, type, (int)c->loc.file.len, c->loc.file.str, (int)c->loc.line);
+	}
+}
+
+void push_call(Ir *ir, StackCall call) {
+	array_add(ir->callstack, call);
+}
+
+void pop_call(Ir *ir) {
+	ir->callstack.size--;
+}
 
 #ifdef _WIN32
 __declspec(noreturn)
@@ -256,6 +290,7 @@ void ir_error(Ir *ir, char *format, ...) {
 	vprintf(format, args);
 	va_end(args);
 	printf("\n");
+	print_stacktrace(ir);
 	assert(!"ir_error assert for dev");
 	exit(1);
 }
@@ -384,7 +419,6 @@ StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes) {
 	return stmts;
 }
 
-Value* eval_value(Ir *ir, Scope *scope, Value *v);
 void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
 	Node *n;
 	for_array(stmts, n) {
@@ -432,7 +466,6 @@ void ir_import_file(Ir *ir, String path) {
 void table_put(Ir *ir, Value *table, Value *key, Value *expr);
 void table_put_name(Ir *ir, Value *table, String name, Value *expr);
 Value* call_function(Ir *ir, Value *func_value, ValueArray args);
-Value* eval_value(Ir *ir, Scope *scope, Value *v);
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	ir->loc = stmt->loc;
@@ -574,22 +607,30 @@ Value* eval_function(Ir *ir, Function func, ValueArray args) {
 
 Value* call_function(Ir *ir, Value *func_value, ValueArray args) {
 	assert(func_value->kind == VALUE_FUNCTION);
-	
+
+	Value *return_value = null_value;
+
 	Function func = func_value->func;
 	switch (func.kind) {
 	case FUNCTION_NORMAL: {
-		return eval_function(ir, func, args);
+		StackCall call = { 0 };
+		call.loc = ir->loc;
+		call.expr = func_value;
+		call.kind = func.kind;
+		push_call(ir, call);
+		return_value = eval_function(ir, func, args);
+		pop_call(ir);
 	} break;
 	case FUNCTION_NATIVE: {
 		assert(func.native.function);
-		return (*func.native.function)(ir, args);
+		return_value = (*func.native.function)(ir, args);
 	} break;
 	case FUNCTION_FFI: {
 		assert(!"Not implemented");
 	} break;
 	}
 
-	return null_value;
+	return return_value;
 }
 
 Value* eval_unary(Ir *ir, Scope *scope, TokenKind op, Value *v) {
