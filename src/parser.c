@@ -7,6 +7,7 @@ typedef enum NodeKind {
 	NODE_UNARY,
 	NODE_FIELD,
 	NODE_CALL,
+	NODE_METHOD_CALL,
 	NODE_RETURN,
 	NODE_FUNC,
 	NODE_VAR,
@@ -72,6 +73,11 @@ struct Node {
 			Node *expr;
 			NodeArray args;
 		} call;
+		struct {
+			Node *expr;
+			String name;
+			NodeArray args;
+		} method_call;
 		struct {
 			Node *expr;
 		} ret;
@@ -259,6 +265,7 @@ Node* make_field(Parser *p, Token field, Node *expr) {
 }
 
 Node* make_call(Parser *p, Token lpar, Node *expr, NodeArray args) {
+	assert(expr);
 	Node *n = alloc_node(p);
 	
 	n->loc = lpar.loc;
@@ -269,6 +276,21 @@ Node* make_call(Parser *p, Token lpar, Node *expr, NodeArray args) {
 
 	return n;
 }
+
+Node* make_method_call(Parser *p, Node *expr, Token name, NodeArray args) {
+	assert(expr);
+	Node *n = alloc_node(p);
+
+	n->loc = name.loc;
+
+	n->kind = NODE_METHOD_CALL;
+	n->method_call.expr = expr;
+	n->method_call.name = name.lexeme;
+	n->method_call.args = args;
+
+	return n;
+}
+
 
 Node* make_var(Parser *p, Token var, String name, Node *init) {
 	Node *n = alloc_node(p);
@@ -525,7 +547,7 @@ Node* expr_operand(Parser *p) {
 Node* expr_base(Parser *p) {
 	Node *expr = expr_operand(p);
 
-	while (is_token(p, TOKEN_LEFTPAR) || is_token(p, TOKEN_LEFTBRACKET) || is_token(p, TOKEN_DOT)) {
+	while (is_token(p, TOKEN_LEFTPAR) || is_token(p, TOKEN_LEFTBRACKET) || is_token(p, TOKEN_DOT) || is_token(p, TOKEN_COLON)) {
 		Token op = p->current_token; // Used to set the location of the nodes
 
 		if (match_token(p, TOKEN_LEFTBRACKET)) {
@@ -557,6 +579,33 @@ Node* expr_base(Parser *p) {
 			Token t = p->current_token;
 			expect(p, TOKEN_IDENT);
 			expr = make_field(p, t, expr);
+		}
+		else if (match_token(p, TOKEN_COLON)) {
+			// expr:t(
+			Token t = p->current_token;
+			expect(p, TOKEN_IDENT);
+
+			if (match_token(p, TOKEN_LEFTPAR)) {
+				NodeArray args = { 0 };
+
+				if (match_token(p, TOKEN_RIGHTPAR)) {
+					// expr:t()
+					expr = make_method_call(p, expr, t, args);
+				}
+				else {
+					// expr:t(...
+					do {
+						Node *arg_expr = parse_expr(p);
+						array_add(args, arg_expr);
+					} while (match_token(p, TOKEN_COMMA));
+					expect(p, TOKEN_RIGHTPAR);
+
+					expr = make_method_call(p, expr, t, args);
+				}
+			}
+			else {
+				parser_error(p, "Expected arguemnt list after ':' operator");
+			}
 		}
 		else {
 			assert(!"Unsynced while cond and ifs");
@@ -776,7 +825,7 @@ Node* parse_block(Parser *p) {
 					stmt = make_assign(p, op, expr, value);
 				}
 				else {
-					if (expr->kind == NODE_CALL) {
+					if (expr->kind == NODE_CALL || expr->kind == NODE_METHOD_CALL) {
 						expect(p, TOKEN_SEMICOLON);
 						stmt = expr;
 					}

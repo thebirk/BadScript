@@ -1,0 +1,35 @@
+func vec2(x, y) {
+	var vec = {x = x, y = y};
+	
+	vec.add = vec2_add;
+	vec.sub = vec2_sub;
+	vec.tostring = vec2_tostring;
+	
+	return vec;
+}
+
+func vec2_add(self, other) {
+	self.x = self.x + other.x;
+	self.y = self.y + other.y;
+	return self;
+}
+
+func vec2_sub(self, other) {
+	self.x = self.x - other.x;
+	self.y = self.y - other.y;
+	return self;
+}
+
+func vec2_tostring(self) {
+	return format("vec2{x = ", self.x, ", y = ", self.y, "}");
+}
+
+func main(args) {
+	var a = vec2(1, 2);
+	var b = vec2(2, 1);
+	a:add(b);
+	println(a:tostring());
+	
+	var c = a:add(b); // passes a as an implicit argument to a.add -> vec2_add
+	println("c: ", c:tostring());
+}

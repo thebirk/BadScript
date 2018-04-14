@@ -30,6 +30,7 @@ typedef enum TokenKind {
 	TOKEN_NE,
 	TOKEN_COMMA,
 	TOKEN_SEMICOLON,
+	TOKEN_COLON,
 	TOKEN_FOR,
 	TOKEN_WHILE,
 	TOKEN_STRING,
@@ -75,6 +76,7 @@ char* token_kind_to_string(TokenKind kind) {
 		case TOKEN_NE:           return "!=";
 		case TOKEN_COMMA:        return ",";
 		case TOKEN_SEMICOLON:    return ";";
+		case TOKEN_COLON:        return ":";
 		case TOKEN_FOR:          return "for";
 		case TOKEN_WHILE:        return "while";
 		case TOKEN_STRING:       return "string";
@@ -325,6 +327,7 @@ void lex(Lexer *lexer) {
 			BASIC_TOKEN('.', TOKEN_DOT);
 			BASIC_TOKEN(',', TOKEN_COMMA);
 			BASIC_TOKEN(';', TOKEN_SEMICOLON);
+			BASIC_TOKEN(':', TOKEN_COLON);
 
 			BASIC_TOKEN('(', TOKEN_LEFTPAR);
 			BASIC_TOKEN(')', TOKEN_RIGHTPAR);

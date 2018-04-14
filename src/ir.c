@@ -57,6 +57,7 @@ typedef enum ValueKind {
 	VALUE_NAME,
 	VALUE_INDEX,
 	VALUE_CALL,
+	VALUE_METHOD_CALL,
 	VALUE_FIELD,
 } ValueKind;
 
@@ -115,6 +116,11 @@ struct Value {
 			Value *expr;
 			String name;
 		} field;
+		struct {
+			Value *expr;
+			String name;
+			ValueArray args;
+		} method_call;
 	};
 };
 Value *null_value = &(Value) { .kind = VALUE_NULL };
@@ -124,6 +130,7 @@ typedef enum StmtKind {
 	STMT_ASSIGN,
 	STMT_RETURN,
 	STMT_CALL,
+	STMT_METHOD_CALL,
 	STMT_BREAK,
 	STMT_CONTINUE,
 	STMT_IF,
@@ -150,6 +157,11 @@ typedef struct Stmt {
 			Value *expr;
 			ValueArray args;
 		} call;
+		struct {
+			Value *expr;
+			String name;
+			ValueArray args;
+		} method_call;
 		struct {
 			int unused;
 		} _break;
@@ -308,6 +320,57 @@ void ir_error(Ir *ir, char *format, ...) {
 	exit(1);
 }
 
+uint64_t hash_value(Ir *ir, Value *v) {
+	switch (v->kind) {
+	case VALUE_NULL: return hash_ptr(null_value);
+	case VALUE_NUMBER: {
+		uint64_t num = 0;
+		assert(sizeof(uint64_t) == sizeof(double));
+		memcpy(&num, &v->number.value, sizeof(uint64_t));
+		return hash_uint64(num);
+	}
+	case VALUE_STRING: {
+		return hash_bytes(v->string.str.str, v->string.str.len);
+	}
+	case VALUE_TABLE: {
+		ir_error(ir, "A table cannot be used as an index");
+	}
+	case VALUE_NAME: {
+		return hash_bytes(v->name.name.str, v->name.name.len);
+	}
+	default: {
+		assert(!"Unimplemented hash_value case");
+		exit(1);
+	} break;
+	}
+}
+
+void table_put(Ir *ir, Value *table, Value *key, Value *val) {
+	assert(table);
+	assert(key);
+	assert(val);
+
+	map_put_hash(&table->table.map, hash_value(ir, key), val);
+}
+
+void table_put_name(Ir *ir, Value *table, String name, Value *val) {
+	assert(table);
+	assert(val);
+
+	map_put_hash(&table->table.map, hash_bytes(name.str, name.len), val);
+}
+
+Value* table_get(Ir *ir, Value *table, Value *key) {
+	uint64_t hash = hash_value(ir, key);
+	return map_get(&table->table.map, hash);
+}
+
+Value* table_get_name(Ir *ir, Value *table, String name) {
+	uint64_t hash = hash_bytes(name.str, name.len);
+	return map_get(&table->table.map, hash);
+}
+
+
 Value* alloc_value(Ir *ir) {
 	return calloc(1, sizeof(Value));
 	//Value v = { 0 };
@@ -393,6 +456,19 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		}
 		return stmt;
 	} break;
+	case NODE_METHOD_CALL: {
+		Stmt *stmt = alloc_stmt(ir, n->loc);
+		stmt->kind = STMT_METHOD_CALL;
+		stmt->method_call.expr = expr_to_value(ir, n->method_call.expr);
+		stmt->method_call.name = n->method_call.name;
+		if (n->method_call.args.size > 0) {
+			Node *arg;
+			for_array(n->method_call.args, arg) {
+				array_add(stmt->method_call.args, expr_to_value(ir, arg));
+			}
+		}
+		return stmt;
+	} break;
 	case NODE_IF: {
 		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_IF;
@@ -470,6 +546,8 @@ void ir_import_file(Ir *ir, String path) {
 	init_parser(&p, path);
 	NodeArray stmts = parse(&p);
 
+	//TODO: Handle recursive imports
+	//TODO: Give every file its own scope, that way, another file cant access our variables etc.
 	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
 }
 
@@ -539,6 +617,29 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 				array_add(args, v);
 			}
 		}
+		call_function(ir, func, args);
+	} break;
+	case STMT_METHOD_CALL: {
+		Value *table = eval_value(ir, scope, stmt->method_call.expr);
+		if (!istable(table)) {
+			ir_error(ir, "':' operator only works with tables as lvalues");
+		}
+
+		Value *func = table_get_name(ir, table, stmt->method_call.name);
+		if (!isfunction(func)) {
+			ir_error(ir, "Right hand side of ':' operator is not a function");
+		}
+
+		ValueArray args = { 0 };
+		array_add(args, table);
+		if (stmt->method_call.args.size > 0) {
+			Value *arg;
+			for_array(stmt->method_call.args, arg) {
+				Value *v = eval_value(ir, scope, arg);
+				array_add(args, v);
+			}
+		}
+
 		call_function(ir, func, args);
 	} break;
 	case STMT_BREAK: {
@@ -790,56 +891,6 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	exit(1);
 }
 
-uint64_t hash_value(Ir *ir, Value *v) {
-	switch (v->kind) {
-	case VALUE_NULL: return hash_ptr(null_value);
-	case VALUE_NUMBER: {
-		uint64_t num = 0;
-		assert(sizeof(uint64_t) == sizeof(double));
-		memcpy(&num, &v->number.value, sizeof(uint64_t));
-		return hash_uint64(num);
-	}
-	case VALUE_STRING: {
-		return hash_bytes(v->string.str.str, v->string.str.len);
-	}
-	case VALUE_TABLE: {
-		ir_error(ir, "A table cannot be used as an index");
-	}
-	case VALUE_NAME: {
-		return hash_bytes(v->name.name.str, v->name.name.len);
-	}
-	default: {
-		assert(!"Unimplemented hash_value case");
-		exit(1);
-	} break;
-	}
-}
-
-void table_put(Ir *ir, Value *table, Value *key, Value *val) {
-	assert(table);
-	assert(key);
-	assert(val);
-
-	map_put_hash(&table->table.map, hash_value(ir, key), val);
-}
-
-void table_put_name(Ir *ir, Value *table, String name, Value *val) {
-	assert(table);
-	assert(val);
-
-	map_put_hash(&table->table.map, hash_bytes(name.str, name.len), val);
-}
-
-Value* table_get(Ir *ir, Value *table, Value *key) {
-	uint64_t hash = hash_value(ir, key);
-	return map_get(&table->table.map, hash);
-}
-
-Value* table_get_name(Ir *ir, Value *table, String name) {
-	uint64_t hash = hash_bytes(name.str, name.len);
-	return map_get(&table->table.map, hash);
-}
-
 Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 	switch (v->kind) {
 	case VALUE_NAME: {
@@ -858,6 +909,9 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 	case VALUE_CALL: {
 		Value *func = eval_value(ir, scope, v->call.expr);
 		assert(func->kind == VALUE_FUNCTION);
+		if (!isfunction(func)) {
+			ir_error(ir, "Tried to call non-function value");
+		}
 		ValueArray args = { 0 };
 		if (v->call.args.size > 0) {
 			Value *arg;
@@ -867,6 +921,31 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 			}
 		}
 		return eval_value(ir, scope, call_function(ir, func, args));
+	} break;
+	case VALUE_METHOD_CALL: {
+		Value *table = eval_value(ir, scope, v->method_call.expr);
+		if (!istable(table)) {
+			ir_error(ir, "':' operator only works with tables as lvalues");
+		}
+
+		Value *func = table_get_name(ir, table, v->method_call.name); // Should return null for non existing values
+		if (!isfunction(func)) {
+			ir_error(ir, "Right hand side of ':' operator is not a function");
+		}
+
+		ValueArray args = { 0 };
+		array_add(args, table);
+		if (v->method_call.args.size > 0) {
+			Value *arg;
+			for_array(v->method_call.args, arg) {
+				Value *v = eval_value(ir, scope, arg);
+				array_add(args, v);
+			}
+		}
+
+		Value *result = call_function(ir, func, args);
+		return eval_value(ir, scope, result);
+
 	} break;
 	case VALUE_TABLE_CONSTANT: {
 		Value *t = alloc_value(ir);
@@ -1009,6 +1088,19 @@ Value* expr_to_value(Ir *ir, Node *n) {
 			Node *arg;
 			for_array(n->call.args, arg) {
 				array_add(v->call.args, expr_to_value(ir, arg));
+			}
+		}
+		return v;
+	} break;
+	case NODE_METHOD_CALL: {
+		Value *v = alloc_value(ir);
+		v->kind = VALUE_METHOD_CALL;
+		v->method_call.expr = expr_to_value(ir, n->method_call.expr);
+		v->method_call.name = n->method_call.name;
+		if (n->method_call.args.size > 0) {
+			Node *arg;
+			for_array(n->method_call.args, arg) {
+				array_add(v->method_call.args, expr_to_value(ir, arg));
 			}
 		}
 		return v;

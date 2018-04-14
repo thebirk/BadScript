@@ -1,0 +1,27 @@
+func a1() {
+	null = null;
+}
+
+func a2() {
+	a1();
+}
+
+func a3() {
+	a2();
+}
+
+func a4() {
+	a3();
+}
+
+func a5() {
+	a4();
+}
+
+func a6() {
+	a5();
+}
+
+func main(args) {
+	a6();
+}
