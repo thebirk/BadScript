@@ -10,13 +10,21 @@ var v20 = "7";
 var v21 = "8";
 var v22 = "9";
 
-var player1 = "x";
-var player2 = "o";
+var player1 = "X";
+var player2 = "O";
 
 func print_table() {
-	println(v00, "|", v01, "|", v02);
-	println(v10, "|", v11, "|", v12);
-	println(v20, "|", v21, "|", v22);
+	println("   |   |   ");
+	println(" ", v00, " | ", v01, " | ", v02);
+	println("___|___|___");
+	
+	println("   |   |   ");
+	println(" ", v10, " | ", v11, " | ", v12);
+	println("___|___|___");
+	
+	println("   |   |   ");
+	println(" ", v20, " | ", v21, " | ", v22);
+	println("   |   |   ");
 }
 
 func check_win(player) {
@@ -97,7 +105,7 @@ func set_square(n, player) {
 }
 
 func get_player_input(player, other_player) {
-	var nstring = input(player, " select your square: ");
+	var nstring = input("'", player, "' select your square: ");
 	println();
 	var n = str2num(nstring);
 	if type(n) == "null" {
@@ -108,10 +116,19 @@ func get_player_input(player, other_player) {
 		println("Please enter a number between 1 and 9!");
 		print_table();
 		return get_player_input(player, other_player);
-	} else if str2num(get_square(n)) != n {
-		println("Square is already occupied, please select another one!");
-		print_table();
-		return get_player_input(player, other_player);
+	} else {
+		var sq = get_square(n);
+		if type(sq) == "null" {
+			println("Your number is between 1 and 9 but not an integer! Bad player!");
+			print_table();
+			return get_player_input(player, other_player);
+		}
+		var sqn = str2num(sq);
+		if type(sqn) == "null" {
+			println("Square is already occupied, please select another one!");
+			print_table();
+			return get_player_input(player, other_player);
+		}
 	}
 	
 	return n;
@@ -128,10 +145,11 @@ func play_round(player, other_player) {
 // - Add some way to convert or floor numbers, that way 8.8 -> 8
 func main(args) {
 	var current_player = 0;
+	var round = 0;
 	
 	while(1) {
 		if current_player == 0 {
-			// player1 - x
+			// player1
 			play_round(player1, player2);
 			if check_win(player1) {
 				println(player1, " won the game!");
@@ -141,7 +159,7 @@ func main(args) {
 				current_player = 1;
 			}
 		} else {
-			// player2 - o
+			// player2
 			play_round(player2, player1);
 			if check_win(player2) {
 				println(player2, " won the game!");
@@ -150,6 +168,13 @@ func main(args) {
 			} else {
 				current_player = 0;
 			}
+		}
+		
+		round = round + 1;
+		if round == 9 {
+			print_table();
+			println("It's a tie!");
+			return;
 		}
 	}
 }
