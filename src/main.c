@@ -9,8 +9,6 @@
 #include <math.h>
 #include <assert.h>
 
-#include "hashmap.h"
-
 #include "common.c"
 #include "timings.c"
 #include "lexer.c"
@@ -21,7 +19,8 @@
 void print_usage(char *binary_name) {
 	printf("Usage: %s [options] <script>\n", binary_name);
 	printf("\nOptions:\n");
-	printf("\t-timings - prints timing information\n");
+	printf("\t-h/-help - Prints out program usage\n");
+	printf("\t-timings - Prints timing information\n");
 	printf("\t-silent  - Suppresses all output\n");
 }
 
@@ -42,6 +41,10 @@ int main(int argc, char **argv) {
 			else if (strcmp(name, "silent") == 0) {
 				silence = true;
 			}
+			else if (strcmp(name, "help") == 0 || strcmp(name, "h") == 0) {
+				print_usage(binary_name);
+				exit(0);
+			}
 			else {
 				printf("Unknown option '%s'!\n", name);
 				print_usage(binary_name);
@@ -59,16 +62,23 @@ int main(int argc, char **argv) {
 			}
 		}
 	}
-	/* Commented out because we use the line under while debugging
-	if (filename.str == 0) {
-		printf("No file was provided!\n");
-		print_usage(argv[0]);
-		exit(1);
-	}*/
-	if (argc == 1) {
+	
+#ifdef _WIN32
+	if (IsDebuggerPresent()) {
 		filename = make_string_slow("tests/tictactoe_table.bs");
 		printf("Parsing: %s\n", filename.str);
 	}
+	else {
+#endif
+		if (filename.str == 0) {
+			printf("No file was provided!\n");
+			print_usage(argv[0]);
+			exit(1);
+		}
+#ifdef _WIN32
+	}
+#endif
+	
 
 	if (silence) {
 #if _WIN32

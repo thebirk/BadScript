@@ -172,7 +172,7 @@ typedef struct Stmt {
 typedef struct Scope Scope;
 struct Scope {
 	Scope *parent;
-	map_t symbols; // char*, Value*
+	Map symbols; // char*, Value*
 };
 
 Scope* alloc_scope(Ir *ir) {
@@ -183,15 +183,14 @@ Scope* make_scope(Ir *ir, Scope *parent) {
 	Scope *scope = alloc_scope(ir);
 
 	scope->parent = parent;
-	scope->symbols = hashmap_new();
 
 	return scope;
 }
 
 // Gets a symbol traveling up through the scope to find it
 Value* scope_get(Ir *ir, Scope *scope, String name) {
-	Value *v;
-	if (hashmap_get(scope->symbols, name.str, &v) == MAP_MISSING) {
+	Value *v = map_get_string(&scope->symbols, name);
+	if (!v) {
 		if (scope->parent) {
 			return scope_get(ir, scope->parent, name);
 		}
@@ -204,27 +203,25 @@ Value* scope_get(Ir *ir, Scope *scope, String name) {
 
 // Adds to current 
 void scope_add(Ir* ir, Scope *scope, String name, Value *v) {
-	Value *test = 0;
-	hashmap_get(scope->symbols, name.str, &test);
+	Value *test = map_get_string(&scope->symbols, name);
 	if (test) {
 		ir_error(ir, "Symbol '%.*s' already exists in this scope!", (int)name.len, name.str);
 	}
 	else {
-		hashmap_put(scope->symbols, name.str, v);
+		map_put_string(&scope->symbols, name, v);
 	}
 }
 
 // Updates a symbol, seach up through the scope
 void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
-	Value *test = 0;
-	hashmap_get(scope->symbols, name.str, &test);
+	Value *test = map_get_string(&scope->symbols, name);
 	if (test) {
 		switch (test->kind) {
 		case VALUE_NULL:
 		case VALUE_STRING:
 		case VALUE_NUMBER:
 		case VALUE_TABLE: {
-			hashmap_put(scope->symbols, name.str, v);
+			map_put_string(&scope->symbols, name, v);
 		} break;
 		case VALUE_FUNCTION: {
 			ir_error(ir, "Cannot assign to a function!");

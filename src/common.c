@@ -199,6 +199,16 @@ void map_put_hash(Map *map, uint64_t hash, void *val) {
 	}
 }
 
+void map_put_string(Map *map, String str, void *val) {
+	uint64_t hash = hash_bytes(str.str, str.len);
+	map_put_hash(map, hash, val);
+}
+
+void* map_get_string(Map *map, String str) {
+	uint64_t hash = hash_bytes(str.str, str.len);
+	return map_get(map, hash);
+}
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
