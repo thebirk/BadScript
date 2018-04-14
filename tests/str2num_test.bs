@@ -1,0 +1,5 @@
+func main(args) {
+	var n = str2num(input("n: "));
+	println();
+	println("str2num(n) = ", n, ", type(n) = ", type(n));
+}
