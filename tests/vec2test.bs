@@ -1,0 +1,8 @@
+import "vec2.bs";
+
+func main(args) {
+	var a = vec2(1, 2);
+	var b = vec2(2, 1);
+	var c = a.sub(a, b);
+	println(c.tostring(c));
+}
