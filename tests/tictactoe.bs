@@ -104,7 +104,7 @@ func get_player_input(player, other_player) {
 		println("Please enter a number!");
 		print_table();
 		return get_player_input(player, other_player);
-	} else if n < 1 && n > 9 {
+	} else if n < 1 || n > 9 {
 		println("Please enter a number between 1 and 9!");
 		print_table();
 		return get_player_input(player, other_player);
@@ -123,6 +123,9 @@ func play_round(player, other_player) {
 	set_square(n, player);
 }
 
+//TODO:
+// - Use tables instead of this stupid var stuff
+// - Add some way to convert or floor numbers, that way 8.8 -> 8
 func main(args) {
 	var current_player = 0;
 	
