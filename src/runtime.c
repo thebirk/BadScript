@@ -126,19 +126,33 @@ Value* runtime_msgbox(Ir *ir, ValueArray args) {
 Value* runtime_str2num(Ir *ir, ValueArray args) {
 	// When we have table perhabs return an array on multiple args
 	assert(args.size == 1); //TODO: Error message
-	assert(args.data[0]->kind == VALUE_STRING); //TODO: Error message
-	double n = strtod(args.data[0]->string.str.str, 0);
+	if (args.size != 1) {
+		ir_error(ir, "str2num only takes one argument");
+	}
+	if (!isstring(args.data[0])) {
+		return null_value;
+	}
+	//double n = strtod(args.data[0]->string.str.str, 0);
+	double n = 0.0;
+	Value *v = args.data[0];
+	int ret = sscanf(v->string.str.str, "%lf", &n);
+	if(ret != 1 || ret == EOF) {
+		return null_value;
+	}
 	return make_number_value(ir, n);
 }
 
 Value* runtime_num2str(Ir *ir, ValueArray args) {
 	// Take second argument specifying precision
-	assert(args.size == 1);
-	assert(args.data[0]->kind == VALUE_NUMBER);
+	if (args.size != 1) {
+		ir_error(ir, "num2str only takes one argument");
+	}
+	if (!isnumber(args.data[0])) {
+		ir_error(ir, "num2str was called with a non-number");
+	}
 	char buffer[128];
 	snprintf(buffer, 128, "%f", args.data[0]->number.value);
-	return null_value;
-	//return make_string_value(ir, make_string_slow(buffer));
+	return make_string_value(ir, make_string_slow(buffer));
 }
 
 Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {

@@ -252,6 +252,7 @@ void ir_error(Ir *ir, char *format, ...) {
 	vprintf(format, args);
 	va_end(args);
 	printf("\n");
+	assert(!"ir_error assert for dev");
 	exit(1);
 }
 
@@ -435,7 +436,9 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		scope_add(ir, scope, stmt->var.name, v);
 	} break;
 	case STMT_RETURN: {
-		*return_value = eval_value(ir, scope, stmt->ret.expr);
+		if (stmt->ret.expr) {
+			*return_value = eval_value(ir, scope, stmt->ret.expr);
+		}
 		return true;
 	} break;
 	case STMT_ASSIGN: {
@@ -489,7 +492,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		if (!isnumber(cond) && !isnull(cond)) {
 			ir_error(ir, "Condition does not evaluate to number or null.");
 		}
-		if (cond->kind == TOKEN_NULL || cond->number.value == 0.0) {
+		if (cond->kind == VALUE_NULL || cond->number.value == 0.0) {
 			// else
 			if (stmt->_if.else_block) {
 				return eval_stmt(ir, scope, stmt->_if.else_block, return_value);
@@ -506,12 +509,12 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 			ir_error(ir, "Condition does not evaluate to number or null.");
 		}
 
-		while (cond->kind != TOKEN_NULL && cond->number.value != 0) {
+		while (cond->kind != VALUE_NULL && cond->number.value != 0) {
 			bool returned = eval_stmt(ir, scope, stmt->_while.block, return_value);
 			if (returned) return returned;
 			
 			cond = eval_value(ir, scope, stmt->_while.cond);
-			if (!isnumber(cond) || !isnull(cond)) {
+			if (!isnumber(cond) && !isnull(cond)) {
 				ir_error(ir, "Condition does not evaluate to number or null.");
 			}
 		}
@@ -582,7 +585,7 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args) {
 
 Value* eval_unary(Ir *ir, Scope *scope, TokenKind op, Value *v) {
 	Value *res = alloc_value(ir);
-	res->kind = TOKEN_NUMBER;
+	res->kind = VALUE_NUMBER;
 	Value *rhs = eval_value(ir, scope, v->unary.v);
 	if (!isnumber(rhs)) {
 		ir_error(ir, "Unary operators only work with numbers.");
@@ -607,19 +610,19 @@ Value* eval_number_op(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_NUMBER;
 	switch (op) {
-	case TOKEN_PLUS:     v->number.value = lhs->number.value + rhs->number.value;
-	case TOKEN_MINUS:    v->number.value = lhs->number.value - rhs->number.value;
-	case TOKEN_ASTERISK: v->number.value = lhs->number.value * rhs->number.value;
-	case TOKEN_SLASH:    v->number.value = lhs->number.value / rhs->number.value;
-	case TOKEN_MOD:      v->number.value = fmod(lhs->number.value, rhs->number.value);
-	case TOKEN_EQUALS:   v->number.value = lhs->number.value == rhs->number.value;
-	case TOKEN_LT:       v->number.value = lhs->number.value < rhs->number.value;
-	case TOKEN_LTE:      v->number.value = lhs->number.value <= rhs->number.value;
-	case TOKEN_GT:       v->number.value = lhs->number.value > rhs->number.value;
-	case TOKEN_GTE:      v->number.value = lhs->number.value >= rhs->number.value;
-	case TOKEN_NE:       v->number.value = lhs->number.value != rhs->number.value;
-	case TOKEN_LAND:     v->number.value = lhs->number.value && rhs->number.value;
-	case TOKEN_LOR:      v->number.value = lhs->number.value || rhs->number.value;
+	case TOKEN_PLUS:     v->number.value = lhs->number.value + rhs->number.value; break;
+	case TOKEN_MINUS:    v->number.value = lhs->number.value - rhs->number.value; break;
+	case TOKEN_ASTERISK: v->number.value = lhs->number.value * rhs->number.value; break;
+	case TOKEN_SLASH:    v->number.value = lhs->number.value / rhs->number.value; break;
+	case TOKEN_MOD:      v->number.value = fmod(lhs->number.value, rhs->number.value); break;
+	case TOKEN_EQUALS:   v->number.value = lhs->number.value == rhs->number.value; break;
+	case TOKEN_LT:       v->number.value = lhs->number.value < rhs->number.value; break;
+	case TOKEN_LTE:      v->number.value = lhs->number.value <= rhs->number.value; break;
+	case TOKEN_GT:       v->number.value = lhs->number.value > rhs->number.value; break;
+	case TOKEN_GTE:      v->number.value = lhs->number.value >= rhs->number.value; break;
+	case TOKEN_NE:       v->number.value = lhs->number.value != rhs->number.value; break;
+	case TOKEN_LAND:     v->number.value = lhs->number.value && rhs->number.value; break;
+	case TOKEN_LOR:      v->number.value = lhs->number.value || rhs->number.value; break;
 	default: {
 		assert(!"Unimplemented binary op");
 	}
@@ -666,11 +669,7 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 		if (!isnumber(lhs) || !isnumber(rhs)) {
 			ir_error(ir, "Operator '%s' is only allowed with numbers", token_kind_to_string(op));
 		}
-		Value *v = alloc_value(ir);
-		v->kind = VALUE_NUMBER;
-		//TODO: Verify this works, perhaps convert the floats to integers
-		v->number.value = lhs->number.value || rhs->number.value;
-		return v;
+		return eval_number_op(ir, scope, op, lhs, rhs);
 	} break;
 
 	case TOKEN_EQUALS: {
@@ -749,7 +748,7 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 				array_add(args, v);
 			}
 		}
-		return call_function(ir, func, args);
+		return eval_value(ir, scope, call_function(ir, func, args));
 	} break;
 	case VALUE_INDEX: {
 		//NOTE: Give error if expr is not a table
@@ -838,7 +837,7 @@ Value* expr_to_value(Ir *ir, Node *n) {
 				case ENTRY_KEY: {
 					Value *key = expr_to_value(ir, entry->key);
 					Value *val = expr_to_value(ir, entry->expr);
-					table_put(ir, );
+					//table_put(ir, );
 				} break;
 				case ENTRY_NORMAL: {
 

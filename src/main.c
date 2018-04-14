@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
 		exit(1);
 	}*/
 	if (argc == 1) {
-		filename = make_string_slow("tests/random_tests.bs");
+		filename = make_string_slow("tests/tictactoe.bs");
 		printf("Parsing: %s\n", filename.str);
 	}
 
