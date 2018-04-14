@@ -17,7 +17,7 @@
 #include "runtime.c"
 
 void print_usage(char *binary_name) {
-	printf("Usage: %s [options] <script>\n", binary_name);
+	printf("Usage: %s [options] <script> [script arguments]\n", binary_name);
 	printf("\nOptions:\n");
 	printf("\t-h/-help - Prints out program usage\n");
 	printf("\t-timings - Prints timing information\n");
@@ -30,8 +30,9 @@ int main(int argc, char **argv) {
 	char* binary_name = argv[0];
 
 	String filename = {0};
-	for (size_t i = 1; i < argc; i++) {
-		char *arg = argv[i];
+	size_t last_arg = 1;
+	for (; last_arg < argc; last_arg++) {
+		char *arg = argv[last_arg];
 		if (*arg == '-') {
 			char *name = arg+1;
 
@@ -52,20 +53,15 @@ int main(int argc, char **argv) {
 			}
 		}
 		else {
-			if (filename.str) {
-				printf("More than one file was provided\n");
-				print_usage(binary_name);
-				exit(1);
-			}
-			else {
-				filename = make_string_slow(arg);
-			}
+			filename = make_string_slow(arg);
+			last_arg++;
+			break; // We  break when we find the file as the rest of the arguments goes to the script
 		}
 	}
 	
 #ifdef _WIN32
 	if (IsDebuggerPresent()) {
-		filename = make_string_slow("tests/selfcall.bs");
+		filename = make_string_slow("tests/argstest.bs");
 		printf("Parsing: %s\n", filename.str);
 	}
 	else {
@@ -107,7 +103,8 @@ int main(int argc, char **argv) {
 	init_ir(&ir, stmts);
 
 	timings_start_section(&t, make_string_slow("ir run"));
-	Value *return_value = ir_run(&ir);
+
+	Value *return_value = ir_run(&ir, argc-last_arg, argv+last_arg);
 
 	if (print_timings) {
 		printf("\n");

@@ -1117,9 +1117,19 @@ Value* expr_to_value(Ir *ir, Node *n) {
 	}
 }
 
-Value* ir_run(Ir *ir) {
-	ValueArray args = {0};
-	array_add(args, null_value);
+Value* ir_run(Ir *ir, size_t argc, char **argv) {
+	ValueArray args = { 0 };
+	Value *arg_table = alloc_value(ir);
+	arg_table->kind = VALUE_TABLE;
+	array_add(args, arg_table);
+
+	if (argc > 0) {
+		for (size_t i = 0; i < argc; i++) {
+			if (argv[i]) {
+				table_put(ir, arg_table, make_number_value(ir, (double)i), make_string_value(ir, make_string_slow(argv[i])));
+			}
+		}
+	}
 	Value *main_func = scope_get(ir, ir->file_scope, string("main"));
 	return call_function(ir, main_func, args, false);
 }

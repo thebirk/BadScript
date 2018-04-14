@@ -1,0 +1,8 @@
+func main(args) {
+	var i = 0;
+	println("We get the following args:");
+	while i < len(args) {
+		println(i+1, ": ", args[i]);
+		i = i + 1;
+	}
+}

@@ -183,6 +183,18 @@ Value* runtime_format(Ir *ir, ValueArray args) {
 	}
 }
 
+Value* runtime_table_len(Ir *ir, ValueArray args) {
+	if(args.size != 1) {
+		ir_error(ir, "len() takes only one argument");
+	}
+	Value *v = args.data[0];
+	if (!istable(v)) {
+		ir_error(ir, "len() only works on tables");
+	}
+
+	return make_number_value(ir, (double)v->table.map.len);
+}
+
 Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_FUNCTION;
@@ -201,4 +213,5 @@ void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("num2str"), make_native_function(ir, runtime_num2str));
 	scope_add(ir, ir->global_scope, string("input_hidden"), make_native_function(ir, runtime_input_hidden));
 	scope_add(ir, ir->global_scope, string("format"), make_native_function(ir, runtime_format));
+	scope_add(ir, ir->global_scope, string("len"), make_native_function(ir, runtime_table_len));
 }
