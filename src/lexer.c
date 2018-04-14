@@ -124,8 +124,14 @@ void lexer_error(Lexer *lexer, char *format, ...) {
 	vprintf(format, args);
 	va_end(args);
 	printf("\n");
-	assert(!"lexer_error");
-	// exit(1);
+
+#ifdef _WIN32
+	if (IsDebuggerPresent()) {
+		assert(!"ir_error assert for dev");
+	}
+#endif
+
+	exit(1);
 }
 
 void read_entire_file(Lexer *lexer, String path) {
@@ -154,7 +160,26 @@ void add_token(Lexer *lexer, Token t) {
 	array_add(lexer->tokens, t);
 }
 
+void check_strings_for_backslashes(String path) {
+	for (size_t i = 0; i < path.len; i++) {
+		if (path.str[i] == '\\') goto err;
+	}
+	return;
+err:
+	printf("File names cannot contain backslashes!\n");
+
+#ifdef _WIN32
+	if (IsDebuggerPresent()) {
+		assert(!"ir_error assert for dev");
+	}
+#endif
+
+	exit(1);
+}
+
 void init_lexer(Lexer *lexer, String path) {
+	check_strings_for_backslashes(path);
+
 	lexer->file = path;
 	lexer->line = 1;
 	lexer->offset = 1;

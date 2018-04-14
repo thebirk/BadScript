@@ -405,8 +405,14 @@ void parser_error(Parser *parser, char *format, ...) {
 	vprintf(format, args);
 	va_end(args);
 	printf("\n");
-	assert(!"parser_error"); // Assert while developing to allow for better debugging
-	//exit(1);
+
+#ifdef _WIN32
+	if (IsDebuggerPresent()) {
+		assert(!"ir_error assert for dev");
+	}
+#endif
+
+	exit(1);
 }
 
 Token next_token(Parser *p) {
@@ -873,10 +879,21 @@ Node* parse_import(Parser *p) {
 
 		Node *n = alloc_node(p);
 		n->kind = NODE_IMPORT;
-		n->import.name = name.lexeme;
 
-		
+		String current_file = p->lexer.file;
+		for (size_t i = current_file.len - 1; i >= 0; i--) {
+			current_file.len--;
+			if (current_file.str[i] == '/') break;
+		}
 
+		String import_file = name.lexeme;
+		String fullpath = make_empty_string_len(current_file.len + import_file.len + 2);
+		memcpy(fullpath.str, current_file.str, current_file.len);
+		fullpath.str[current_file.len] = '/';
+		memcpy(fullpath.str + current_file.len + 1, import_file.str, import_file.len);
+		fullpath.str[current_file.len + import_file.len + 1] = 0;
+
+		n->import.name = fullpath;
 		return n;
 	}
 	else {

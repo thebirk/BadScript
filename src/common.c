@@ -16,6 +16,15 @@ String make_string_slow(char *c_str) {
 	return result;
 }
 
+String make_empty_string_len(size_t len) {
+	String result = { 0 };
+
+	result.len = len;
+	result.str = malloc(result.len);
+
+	return result;
+}
+
 String make_string_slow_len(char *c_str, size_t len) {
 	String result = {0};
 
