@@ -426,26 +426,8 @@ StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes) {
 	return stmts;
 }
 
-void convert_top_levels_to_ir(Ir *ir, NodeArray stmts);
-void init_ir(Ir *ir, NodeArray stmts) {
-	array_init(ir->value_memory, 512);
-	ir->global_scope = make_scope(ir, 0);
-	ir->file_scope = make_scope(ir, ir->global_scope);
-	convert_top_levels_to_ir(ir, stmts);
-
-	add_globals(ir);
-}
-
-void ir_import_file(Ir *ir, String path) {
-	Parser p;
-	memset(&p, 0, sizeof(Parser));
-	init_parser(&p, path);
-	NodeArray stmts = parse(&p);
-
-	convert_top_levels_to_ir(ir, stmts);
-}
-
-void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
+void ir_import_file(Ir *ir, String path);
+void convert_top_levels_to_ir(Ir *ir, Scope *scope, NodeArray stmts) {
 	Node *n;
 	for_array(stmts, n) {
 		ir->loc = n->loc;
@@ -476,6 +458,23 @@ void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
 	}
 }
 
+void ir_import_file(Ir *ir, String path) {
+	Parser p;
+	memset(&p, 0, sizeof(Parser));
+	init_parser(&p, path);
+	NodeArray stmts = parse(&p);
+
+	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
+}
+
+void init_ir(Ir *ir, NodeArray stmts) {
+	array_init(ir->value_memory, 512);
+	ir->global_scope = make_scope(ir, 0);
+	ir->file_scope = make_scope(ir, ir->global_scope);
+	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
+
+	add_globals(ir);
+}
 
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {

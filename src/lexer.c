@@ -161,20 +161,17 @@ void add_token(Lexer *lexer, Token t) {
 }
 
 void check_strings_for_backslashes(String path) {
+	bool did_convert = false;
 	for (size_t i = 0; i < path.len; i++) {
-		if (path.str[i] == '\\') goto err;
+		if (path.str[i] == '\\') {
+			path.str[i] = '/';
+			did_convert = true;
+		}
 	}
-	return;
-err:
-	printf("File names cannot contain backslashes!\n");
 
-#ifdef _WIN32
-	if (IsDebuggerPresent()) {
-		assert(!"ir_error assert for dev");
+	if (did_convert) {
+		printf("lexer: Converted backslahes to slashes!\n\n");
 	}
-#endif
-
-	exit(1);
 }
 
 void init_lexer(Lexer *lexer, String path) {
