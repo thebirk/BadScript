@@ -28,6 +28,8 @@ void ir_error(Ir *ir, char *format, ...);
 
 typedef struct Function {
 	FunctionKind kind;
+	String name;
+	SourceLoc loc;
 	union {
 		struct {
 			StringArray arg_names;
@@ -243,7 +245,7 @@ void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
 
 typedef struct StackCall {
 	SourceLoc loc;
-	Value *expr;
+	String name;
 	FunctionKind kind;
 } StackCall;
 typedef Array(StackCall) CallStack;
@@ -260,8 +262,10 @@ struct Ir {
 void print_stacktrace(Ir *ir) {
 	assert(ir->callstack.size);
 	printf("Stack trace (most recent call at top)\n");
-	StackCall *c;
-	for_array_ref(ir->callstack, c) {
+	
+	for (int i = (int)ir->callstack.size - 1; i >= 0; i--) {
+	//for (int i = 0; i < (int)ir->callstack.size; i++) {
+		StackCall *c = &ir->callstack.data[i];
 		char *type = "";
 		if (c->kind == FUNCTION_NATIVE) {
 			type = "native:";
@@ -269,7 +273,7 @@ void print_stacktrace(Ir *ir) {
 		else if (c->kind == FUNCTION_FFI) {
 			type = "ffi:";
 		}
-		printf("  %d\t- %s(%.*s:%d)\n", (int)it_index, type, (int)c->loc.file.len, c->loc.file.str, (int)c->loc.line);
+		printf("  %d\t- %s%.*s(%.*s:%d)\n", i, type, (int)c->name.len, c->name.str, (int)c->loc.file.len, c->loc.file.str, (int)c->loc.line);
 	}
 }
 
@@ -444,6 +448,8 @@ void convert_top_levels_to_ir(Ir *ir, Scope *scope, NodeArray stmts) {
 			v->kind = VALUE_FUNCTION;
 			Function *f = &v->func;
 			f->kind = FUNCTION_NORMAL;
+			f->name = n->func.name;
+			f->loc = n->loc;
 			f->normal.scope = make_scope(ir, ir->file_scope);
 			f->normal.arg_names = n->func.args;
 			f->normal.stmts = convert_nodes_to_stmts(ir, n->func.block->block.stmts);
@@ -624,9 +630,9 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args) {
 	switch (func.kind) {
 	case FUNCTION_NORMAL: {
 		StackCall call = { 0 };
-		call.loc = ir->loc;
-		call.expr = func_value;
+		call.loc = func.loc;
 		call.kind = func.kind;
+		call.name = func.name;
 		push_call(ir, call);
 		return_value = eval_function(ir, func, args);
 		pop_call(ir);

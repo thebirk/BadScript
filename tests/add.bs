@@ -1,3 +1,4 @@
 func add(a, b) {
+	null = null;
 	return a+b;
 }
