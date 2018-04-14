@@ -14,7 +14,7 @@ typedef Array(Stmt*) StmtArray;
 Value* eval_value(Ir *ir, Scope *scope, Value *v);
 void table_put(Ir *ir, Value *table, Value *key, Value *expr);
 void table_put_name(Ir *ir, Value *table, String name, Value *expr);
-Value* call_function(Ir *ir, Value *func_value, ValueArray args);
+Value* call_function(Ir *ir, Value *func_value, ValueArray args, bool is_method_call);
 StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes);
 Value* expr_to_value(Ir *ir, Node *n);
 void add_globals(Ir *ir); // Found in runtime.c
@@ -617,7 +617,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 				array_add(args, v);
 			}
 		}
-		call_function(ir, func, args);
+		call_function(ir, func, args, false);
 	} break;
 	case STMT_METHOD_CALL: {
 		Value *table = eval_value(ir, scope, stmt->method_call.expr);
@@ -640,7 +640,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 			}
 		}
 
-		call_function(ir, func, args);
+		call_function(ir, func, args, true);
 	} break;
 	case STMT_BREAK: {
 		IncompletePath();
@@ -699,14 +699,19 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	return false;
 }
 
-Value* eval_function(Ir *ir, Function func, ValueArray args) {
+Value* eval_function(Ir *ir, Function func, ValueArray args, bool is_method_call) {
 	// Check that we recieved the right amount of args
 	// Register args with appropiate names
 	// Eval all stmts
 	Value *return_value = null_value;
 
 	if (func.normal.arg_names.size != args.size) {
-		ir_error(ir, "Argument count mismatch! Wanted %d got %d.", (int)func.normal.arg_names.size, (int)args.size);
+		if (is_method_call) {
+			ir_error(ir, "Argument count mismatch! Wanted %d got %d. This function was called as a method which means the left hand side of ':' is passed as the first argument.", (int)func.normal.arg_names.size, (int)args.size);
+		}
+		else {
+			ir_error(ir, "Argument count mismatch! Wanted %d got %d.", (int)func.normal.arg_names.size, (int)args.size);
+		}
 	}
 
 	if (func.normal.stmts.size > 0) {
@@ -724,7 +729,7 @@ Value* eval_function(Ir *ir, Function func, ValueArray args) {
 	return return_value;
 }
 
-Value* call_function(Ir *ir, Value *func_value, ValueArray args) {
+Value* call_function(Ir *ir, Value *func_value, ValueArray args, bool is_method_call) {
 	assert(func_value->kind == VALUE_FUNCTION);
 
 	Value *return_value = null_value;
@@ -737,7 +742,7 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args) {
 		call.kind = func.kind;
 		call.name = func.name;
 		push_call(ir, call);
-		return_value = eval_function(ir, func, args);
+		return_value = eval_function(ir, func, args, is_method_call);
 		pop_call(ir);
 	} break;
 	case FUNCTION_NATIVE: {
@@ -920,7 +925,7 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 				array_add(args, v);
 			}
 		}
-		return eval_value(ir, scope, call_function(ir, func, args));
+		return eval_value(ir, scope, call_function(ir, func, args, false));
 	} break;
 	case VALUE_METHOD_CALL: {
 		Value *table = eval_value(ir, scope, v->method_call.expr);
@@ -943,7 +948,7 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 			}
 		}
 
-		Value *result = call_function(ir, func, args);
+		Value *result = call_function(ir, func, args, true);
 		return eval_value(ir, scope, result);
 
 	} break;
@@ -1116,5 +1121,5 @@ Value* ir_run(Ir *ir) {
 	ValueArray args = {0};
 	array_add(args, null_value);
 	Value *main_func = scope_get(ir, ir->file_scope, string("main"));
-	return call_function(ir, main_func, args);
+	return call_function(ir, main_func, args, false);
 }

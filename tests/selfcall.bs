@@ -27,7 +27,7 @@ func vec2_tostring(self) {
 func main(args) {
 	var a = vec2(1, 2);
 	var b = vec2(2, 1);
-	a:add(b);
+	a:add(b, 123);
 	println(a:tostring());
 	
 	var c = a:add(b); // passes a as an implicit argument to a.add -> vec2_add
