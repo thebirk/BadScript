@@ -528,7 +528,9 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	} break;
 	case STMT_CALL: {
 		Value *func = eval_value(ir, scope, stmt->call.expr);
-		assert(func->kind == VALUE_FUNCTION); //TODO: Can we call other stuff
+		if (!isfunction(func)) {
+			ir_error(ir, "Tried to call a non-function value!");
+		}
 		ValueArray args = { 0 };
 		if (stmt->call.args.size > 0) {
 			Value *arg;
@@ -876,20 +878,20 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 			for_array_ref(v->table_constant.entries, e) {
 				switch (e->kind) {
 				case ENTRY_NORMAL: {  // v
-					table_put(ir, t, make_number_value(ir, (double)index), expr_to_value(ir, e->expr)); //TODO: This will evalue any names. Should this be done for calls only
+					table_put(ir, t, make_number_value(ir, (double)index), eval_value(ir, scope, expr_to_value(ir, e->expr)));
 					index++;
 				} break;
 				case ENTRY_INDEX: { // [blah] = v
 					Value *index = eval_value(ir, scope, expr_to_value(ir, e->index));
 					//TODO: Handle null index
-					table_put(ir, t, index, expr_to_value(ir, e->expr));
+					table_put(ir, t, index, eval_value(ir, scope, expr_to_value(ir, e->expr)));
 				} break;
 				case ENTRY_KEY: {     // name = v
 					Value *name = expr_to_value(ir, e->key);
 					if (!isname(name) && !isstring(name)) {
 						ir_error(ir, "Expected left hand side of assignment to be a name or string!");
 					}
-					table_put(ir, t, name, expr_to_value(ir, e->expr));
+					table_put(ir, t, name, eval_value(ir, scope, expr_to_value(ir, e->expr)));
 				} break;
 
 				default: {

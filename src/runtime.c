@@ -155,6 +155,34 @@ Value* runtime_num2str(Ir *ir, ValueArray args) {
 	return make_string_value(ir, make_string_slow(buffer));
 }
 
+Value* runtime_format(Ir *ir, ValueArray args) {
+#define FORMAT_BUFFER_SIZE 4096
+	char buffer[FORMAT_BUFFER_SIZE];
+	int offset = 0;
+
+	if (args.size > 0) {
+		//TODO: Split into seperate function runtime__help_snprintf
+		//TODO: Make safer, check return values
+		Value *v;
+		for_array(args, v) {
+			if (v->kind == VALUE_STRING) {
+				offset += snprintf(buffer + offset, FORMAT_BUFFER_SIZE - offset, "%.*s", (int)v->string.str.len, v->string.str.str);
+			}
+			else if (v->kind == VALUE_NUMBER) {
+				offset += snprintf(buffer + offset, FORMAT_BUFFER_SIZE - offset, "%f", v->number.value);
+			}
+			else if (v->kind == VALUE_NULL) {
+				offset += snprintf(buffer + offset, FORMAT_BUFFER_SIZE - offset, "(null)");
+			}
+		}
+
+		return make_string_value(ir, make_string_slow_len(buffer, offset));
+	}
+	else {
+		return null_value;
+	}
+}
+
 Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_FUNCTION;
@@ -172,4 +200,5 @@ void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("str2num"), make_native_function(ir, runtime_str2num));
 	scope_add(ir, ir->global_scope, string("num2str"), make_native_function(ir, runtime_num2str));
 	scope_add(ir, ir->global_scope, string("input_hidden"), make_native_function(ir, runtime_input_hidden));
+	scope_add(ir, ir->global_scope, string("format"), make_native_function(ir, runtime_format));
 }

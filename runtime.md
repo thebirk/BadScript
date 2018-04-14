@@ -17,6 +17,7 @@ Prints all the arguments to stdout
 print("1 + 2 = ", 1+2);
 ```
 
+
 ## println
 ---
 Same as [print](#print) but prints a newline at the end
@@ -30,6 +31,21 @@ Same as [print](#print) but prints a newline at the end
 #### Example
 ```lua
 println("Hello, world!");
+```
+
+## format
+---
+Returns a string as if it was printed by print
+
+#### Arguments
+* \*args
+
+#### Returns
+* string
+
+#### Example
+```lua
+var c = format("1 + 2 = ", 1+2);
 ```
 
 ## type
