@@ -25,13 +25,17 @@ typedef enum NodeKind {
 typedef enum TableEntryKind {
 	ENTRY_NORMAL, // { expr, expr, expr }
 	ENTRY_KEY,    // { expr = expr, expr = expr }
+	ENTRY_INDEX,  // { [expr] = expr, [expr] = expr}
 } TableEntryKind;
 
 typedef struct Node Node;
 typedef struct TableEntry {
 	TableEntryKind kind;
-	Node *key;
 	Node *expr;
+	union {
+		Node *key;
+		Node *index;
+	};
 } TableEntry;
 typedef Array(TableEntry) TableEntryArray;
 
@@ -472,22 +476,34 @@ Node* expr_operand(Parser *p) {
 				break;
 			}
 
-			// If we have a [ parse an index
-			// In ir.c have a value called TABLE_CONSTANT
-			// This will then eval into a proper TABLE
-			Node *expr = parse_expr(p);
+			if (match_token(p, TOKEN_LEFTBRACKET)) {
+				Node *index = parse_expr(p);
+				expect(p, TOKEN_RIGHTBRACKET);
 
-			if (match_token(p, TOKEN_EQUAL)) {
+				expect(p, TOKEN_EQUAL);
+
 				Node *value = parse_expr(p);
-				TableEntry entry = (TableEntry) { .kind = ENTRY_KEY, .key = expr, .expr = value };
+				TableEntry entry = (TableEntry) { .kind = ENTRY_INDEX, .key = index, .expr = value};
 				array_add(entries, entry);
 			}
 			else {
-				TableEntry entry = (TableEntry) { .kind = ENTRY_NORMAL, .key = 0, .expr = expr };
-				array_add(entries, entry);
+				Node *expr = parse_expr(p);
+
+				if (match_token(p, TOKEN_EQUAL)) {
+					Node *value = parse_expr(p);
+					TableEntry entry = (TableEntry) { .kind = ENTRY_KEY, .key = expr, .expr = value };
+					array_add(entries, entry);
+				}
+				else {
+					TableEntry entry = (TableEntry) { .kind = ENTRY_NORMAL, .key = 0, .expr = expr };
+					array_add(entries, entry);
+				}
 			}
 		} while (!is_token(p, TOKEN_RIGHTBRACE) && match_token(p, TOKEN_COMMA));
-		expect(p, TOKEN_RIGHTBRACE);
+		if (!match_token(p, TOKEN_RIGHTBRACE)) {
+			//expect(p, TOKEN_RIGHTBRACE);
+			parser_error(p, "Expected ',' or '}' but got '%s'!", token_kind_to_string(p->current_token.kind));
+		}
 
 		return make_table(p, t, entries);
 	}

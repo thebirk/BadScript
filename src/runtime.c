@@ -70,7 +70,7 @@ Value* runtime_type(Ir *ir, ValueArray args) {
 		case VALUE_TABLE:  return make_string_value(ir, make_string_slow("table"));
 		case VALUE_FUNCTION:  return make_string_value(ir, make_string_slow("function"));
 		}
-		return make_string_value(ir, make_string_slow("Hey! You found a bug. We have added a new type and forgetten to add it here!"));
+		ir_error(ir, "Hey! You found a bug. We have added a new type and have forgetten to add it to runtime_type!");
 	}
 	else {
 		assert(!"We still need an error here"); //TODO: Error

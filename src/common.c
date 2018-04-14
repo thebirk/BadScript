@@ -96,7 +96,6 @@ typedef Array(String) StringArray;
 } while(0)
 
 typedef struct MapEntry {
-	void *key;
 	void *val;
 	uint64_t hash;
 } MapEntry;
@@ -152,7 +151,7 @@ void* map_get(Map *map, uint64_t hash) {
 	return 0;
 }
 
-void map_put_hash(Map *map, uint64_t hash, void *key, void *val);
+void map_put_hash(Map *map, uint64_t hash, void *val);
 void map_grow(Map *map, size_t new_cap) {
 	new_cap = max(16, new_cap);
 	Map new_map = {
@@ -162,8 +161,8 @@ void map_grow(Map *map, size_t new_cap) {
 
 	for (size_t i = 0; i < map->cap; i++) {
 		MapEntry *e = &map->entries[i];
-		if (e->key) {
-			map_put_hash(map, e->hash, e->key, e->val);
+		if (e->hash) {
+			map_put_hash(&new_map, e->hash, e->val);
 		}
 	}
 
@@ -172,8 +171,7 @@ void map_grow(Map *map, size_t new_cap) {
 }
 
 //TODO: Do string interning and remove c_hashmap completly
-void map_put_hash(Map *map, uint64_t hash, void *key, void *val) {
-	assert(key);
+void map_put_hash(Map *map, uint64_t hash, void *val) {
 	assert(val);
 	if (2 * map->len >= map->cap) {
 		map_grow(map, 2 * map->cap);
@@ -185,9 +183,8 @@ void map_put_hash(Map *map, uint64_t hash, void *key, void *val) {
 	for (;;) {
 		i &= map->cap - 1;
 		MapEntry *e = &map->entries[i];
-		if (!e->key) {
+		if (!e->hash) {
 			map->len++;
-			e->key = key;
 			e->val = val;
 			e->hash = hash;
 			return;

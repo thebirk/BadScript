@@ -1,0 +1,15 @@
+func f() {
+	var t = 999;
+	return t;
+}
+
+func main(args) {
+	var table = {
+		f(), test = 321, "test" = 444,
+		[12] = "Hello, world!"
+	};
+	println("table[0]        = ", table[0]);
+	println("table[''test''] = ", table["test"]);
+	println("table.test      = ", table.test);
+	println("table[12]       = ", table[12]);
+}

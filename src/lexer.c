@@ -327,6 +327,7 @@ void lex(Lexer *lexer) {
 			ptr++;
 			char *start = ptr;
 			while (*ptr && *ptr != '"') {
+				// TODO: Escaping quotes
 				ptr++;
 			}
 			if (*ptr != '"') {

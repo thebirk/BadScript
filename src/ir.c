@@ -40,6 +40,7 @@ typedef enum ValueKind {
 	VALUE_NUMBER,
 	VALUE_STRING,
 	VALUE_TABLE,
+	VALUE_TABLE_CONSTANT,
 	VALUE_FUNCTION,
 	VALUE_BINOP,
 	VALUE_UNARY,
@@ -76,6 +77,9 @@ struct Value {
 		struct {
 			Map map;
 		} table;
+		struct {
+			TableEntryArray entries;
+		} table_constant;
 		Function func;
 		struct {
 			TokenKind op;
@@ -425,6 +429,8 @@ void ir_import_file(Ir *ir, String path) {
 
 }
 
+void table_put(Ir *ir, Value *table, Value *key, Value *expr);
+void table_put_name(Ir *ir, Value *table, String name, Value *expr);
 Value* call_function(Ir *ir, Value *func_value, ValueArray args);
 Value* eval_value(Ir *ir, Scope *scope, Value *v);
 // True if we had a return,break,continue, etc
@@ -458,10 +464,13 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 			scope_set(ir, scope, lhs->name.name, rhs);
 		} break;
 		case VALUE_FIELD: {
-			IncompletePath();
+			Value *expr = eval_value(ir, scope, lhs->field.expr);
+			table_put_name(ir, expr, lhs->field.name, rhs);
 		} break;
 		case VALUE_INDEX: {
-			IncompletePath();
+			Value *expr = eval_value(ir, scope, lhs->index.expr);
+			Value *index = eval_value(ir, scope, lhs->index.index);
+			table_put(ir, expr, index, rhs);
 		} break;
 		default: {
 			ir_error(ir, "Cannot assign to left hand");
@@ -722,47 +731,6 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 	exit(1);
 }
 
-Value* eval_value(Ir *ir, Scope *scope, Value *v) {
-	switch (v->kind) {
-	case VALUE_NAME: {
-		Value *var = scope_get(ir, scope, v->name.name);
-		assert(var); // scope_get should complain about missing symbols
-		return eval_value(ir, scope, var);
-	} break;
-	case VALUE_BINOP: {
-		Value *lhs = eval_value(ir, scope, v->binary.lhs);
-		Value *rhs = eval_value(ir, scope, v->binary.rhs);
-		return eval_binop(ir, scope, v->binary.op, lhs, rhs);
-	} break;
-	case VALUE_UNARY: {
-		return eval_unary(ir, scope, v->unary.op, v);
-	} break;
-	case VALUE_CALL: {
-		Value *func = eval_value(ir, scope, v->call.expr);
-		assert(func->kind == VALUE_FUNCTION);
-		ValueArray args = { 0 };
-		if (v->call.args.size > 0) {
-			Value *arg;
-			for_array(v->call.args, arg) {
-				Value *v = eval_value(ir, scope, arg);
-				array_add(args, v);
-			}
-		}
-		return eval_value(ir, scope, call_function(ir, func, args));
-	} break;
-	case VALUE_INDEX: {
-		//NOTE: Give error if expr is not a table
-		IncompletePath();
-	} break;
-	case VALUE_FIELD: {
-		IncompletePath();
-	} break;
-	default: {
-		return v;
-	} break;
-	}
-}
-
 uint64_t hash_value(Ir *ir, Value *v) {
 	switch (v->kind) {
 	case VALUE_NULL: return hash_ptr(null_value);
@@ -792,7 +760,14 @@ void table_put(Ir *ir, Value *table, Value *key, Value *val) {
 	assert(key);
 	assert(val);
 
-	map_put_hash(&table->table.map, hash_value(ir, key), key, val);
+	map_put_hash(&table->table.map, hash_value(ir, key), val);
+}
+
+void table_put_name(Ir *ir, Value *table, String name, Value *val) {
+	assert(table);
+	assert(val);
+
+	map_put_hash(&table->table.map, hash_bytes(name.str, name.len), val);
 }
 
 Value* table_get(Ir *ir, Value *table, Value *key) {
@@ -800,6 +775,112 @@ Value* table_get(Ir *ir, Value *table, Value *key) {
 	return map_get(&table->table.map, hash);
 }
 
+Value* table_get_name(Ir *ir, Value *table, String name) {
+	uint64_t hash = hash_bytes(name.str, name.len);
+	return map_get(&table->table.map, hash);
+}
+
+Value* eval_value(Ir *ir, Scope *scope, Value *v) {
+	switch (v->kind) {
+	case VALUE_NAME: {
+		Value *var = scope_get(ir, scope, v->name.name);
+		assert(var); // scope_get should complain about missing symbols
+		return eval_value(ir, scope, var);
+	} break;
+	case VALUE_BINOP: {
+		Value *lhs = eval_value(ir, scope, v->binary.lhs);
+		Value *rhs = eval_value(ir, scope, v->binary.rhs);
+		return eval_binop(ir, scope, v->binary.op, lhs, rhs);
+	} break;
+	case VALUE_UNARY: {
+		return eval_unary(ir, scope, v->unary.op, v);
+	} break;
+	case VALUE_CALL: {
+		Value *func = eval_value(ir, scope, v->call.expr);
+		assert(func->kind == VALUE_FUNCTION);
+		ValueArray args = { 0 };
+		if (v->call.args.size > 0) {
+			Value *arg;
+			for_array(v->call.args, arg) {
+				Value *v = eval_value(ir, scope, arg);
+				array_add(args, v);
+			}
+		}
+		return eval_value(ir, scope, call_function(ir, func, args));
+	} break;
+	case VALUE_TABLE_CONSTANT: {
+		Value *t = alloc_value(ir);
+		t->kind = VALUE_TABLE;
+
+		if (v->table_constant.entries.size > 0) {
+			size_t index = 0;
+			TableEntry *e;
+			for_array_ref(v->table_constant.entries, e) {
+				switch (e->kind) {
+				case ENTRY_NORMAL: {  // v
+					table_put(ir, t, make_number_value(ir, (double)index), expr_to_value(ir, e->expr)); //TODO: This will evalue any names. Should this be done for calls only
+					index++;
+				} break;
+				case ENTRY_INDEX: { // [blah] = v
+					Value *index = eval_value(ir, scope, expr_to_value(ir, e->index));
+					//TODO: Handle null index
+					table_put(ir, t, index, expr_to_value(ir, e->expr));
+				} break;
+				case ENTRY_KEY: {     // name = v
+					Value *name = expr_to_value(ir, e->key);
+					if (!isname(name) && !isstring(name)) {
+						ir_error(ir, "Expected lhs of assignment to be a name or string!");
+					}
+					table_put(ir, t, name, expr_to_value(ir, e->expr));
+				} break;
+
+				default: {
+					assert(!"Invalid table entry kind!");
+					exit(1);
+				} break;
+				}
+			}
+		}
+
+		return t;
+	} break;
+	case VALUE_INDEX: {
+		Value *expr = eval_value(ir, scope, v->index.expr);
+		if (!istable(expr)) {
+			ir_error(ir, "Left hand side of '[]' operator is not a table!");
+		}
+
+		Value *index = eval_value(ir, scope, v->index.index);
+		//TODO: Where do we handle a null index?
+
+		Value *table_value = table_get(ir, expr, index);
+		if (table_value) {
+			return eval_value(ir, scope, table_value);
+		}
+		else {
+			return null_value;
+		}
+		
+	} break;
+	case VALUE_FIELD: {
+		Value *expr = eval_value(ir, scope, v->field.expr);
+		if (!istable(expr)) {
+			ir_error(ir, "Left hand side of '.' it not a table!");
+		}
+
+		Value *table_value = table_get_name(ir, expr, v->field.name);
+		if (table_value) {
+			return eval_value(ir, scope, table_value);
+		}
+		else {
+			return null_value;
+		}
+	} break;
+	default: {
+		return v;
+	} break;
+	}
+}
 
 Value* expr_to_value(Ir *ir, Node *n) {
 	switch (n->kind) {
@@ -827,29 +908,8 @@ Value* expr_to_value(Ir *ir, Node *n) {
 	} break;
 	case NODE_TABLE: {
 		Value *v = alloc_value(ir);
-		v->kind = VALUE_TABLE;
-
-		if (n->table.entries.size > 0) {
-			size_t normal_offset = 0;
-			TableEntry *entry;
-			for_array_ref(n->table.entries, entry) {
-				switch (entry->kind) {
-				case ENTRY_KEY: {
-					Value *key = expr_to_value(ir, entry->key);
-					Value *val = expr_to_value(ir, entry->expr);
-					//table_put(ir, );
-				} break;
-				case ENTRY_NORMAL: {
-
-				} break;
-				default: {
-					assert(!"Invalid TableEntry kind. Uh oh");
-					exit(1);
-				} break;
-				}
-			}
-		}
-		
+		v->kind = VALUE_TABLE_CONSTANT;
+		v->table_constant.entries = n->table.entries;
 		return v;
 	} break;
 	case NODE_BINOP: {
