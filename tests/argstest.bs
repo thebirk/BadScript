@@ -1,6 +1,10 @@
 func main(args) {
 	var i = 0;
-	println("We get the following args:");
+	if len(args) == 0 {
+		println("We got no arguments :(");
+		return;
+	}
+	println("We got the following args:");
 	while i < len(args) {
 		println(i+1, ": ", args[i]);
 		i = i + 1;

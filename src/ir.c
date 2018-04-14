@@ -273,7 +273,6 @@ struct Ir {
 
 void print_stacktrace(Ir *ir) {
 	assert(ir->callstack.size);
-	printf("Stack trace (most recent call at top)\n");
 	
 	for (int i = (int)ir->callstack.size - 1; i >= 0; i--) {
 	//for (int i = 0; i < (int)ir->callstack.size; i++) {
@@ -285,7 +284,7 @@ void print_stacktrace(Ir *ir) {
 		else if (c->kind == FUNCTION_FFI) {
 			type = "ffi:";
 		}
-		printf("  %d\t- %s%.*s(%.*s:%d)\n", i, type, (int)c->name.len, c->name.str, (int)c->loc.file.len, c->loc.file.str, (int)c->loc.line);
+		printf("    %s%.*s() - %.*s:(%d)\n", type, (int)c->name.len, c->name.str, (int)c->loc.file.len, c->loc.file.str, (int)c->loc.line);
 	}
 }
 
