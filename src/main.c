@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 	
 #ifdef _WIN32
 	if (IsDebuggerPresent()) {
-		filename = make_string_slow("tests/tictactoe_table.bs");
+		filename = make_string_slow("tests/import_test.bs");
 		printf("Parsing: %s\n", filename.str);
 	}
 	else {

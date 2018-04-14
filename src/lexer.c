@@ -36,6 +36,7 @@ typedef enum TokenKind {
 	TOKEN_LAND,
 	TOKEN_LOR,
 	TOKEN_DOT,
+	TOKEN_IMPORT,
 	TOKEN_EOF,
 
 	LAST_TOKEN_KIND,
@@ -80,6 +81,7 @@ char* token_kind_to_string(TokenKind kind) {
 		case TOKEN_LAND:         return "&&";
 		case TOKEN_LOR:          return "||";
 		case TOKEN_DOT:          return ".";
+		case TOKEN_IMPORT:       return "import";
 		case TOKEN_EOF:          return "(end of file)";
 
 		default: return "(unimplemented TokenKind name)";
@@ -380,6 +382,7 @@ void lex(Lexer *lexer) {
 			KEYWORD(string("continue"), TOKEN_CONTINUE)
 			KEYWORD(string("break"),    TOKEN_BREAK)
 			KEYWORD(string("null"),     TOKEN_NULL)
+			KEYWORD(string("import"),   TOKEN_IMPORT)
 #undef KEYWORD
 		}
 	}

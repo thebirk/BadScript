@@ -20,6 +20,7 @@ typedef enum NodeKind {
 	NODE_BLOCK,
 	NODE_TABLE,
 	NODE_NULL,
+	NODE_IMPORT,
 } NodeKind;
 
 typedef enum TableEntryKind {
@@ -115,6 +116,9 @@ struct Node {
 			TableEntryArray entries;
 		} table;
 		struct { int unsued;  } _null;
+		struct {
+			String name;
+		} import;
 	};
 };
 
@@ -861,6 +865,26 @@ Node* parse_func(Parser *p) {
 	}
 }
 
+Node* parse_import(Parser *p) {
+	if (match_token(p, TOKEN_IMPORT)) {
+		Token name = p->current_token;
+		expect(p, TOKEN_STRING);
+		expect(p, TOKEN_SEMICOLON);
+
+		Node *n = alloc_node(p);
+		n->kind = NODE_IMPORT;
+		n->import.name = name.lexeme;
+
+		
+
+		return n;
+	}
+	else {
+		assert(!"parse_import was called but TOKEN_IMPORT was not the current token!");
+		exit(1);
+	}
+}
+
 NodeArray parse(Parser *p) {
 	NodeArray stmts = { 0 };
 
@@ -872,6 +896,9 @@ NodeArray parse(Parser *p) {
 		}
 		else if (is_token(p, TOKEN_FUNC)) {
 			stmt = parse_func(p);
+		}
+		else if (is_token(p, TOKEN_IMPORT)) {
+			stmt = parse_import(p);
 		}
 		else if (match_token(p, TOKEN_SEMICOLON)) {
 			continue;
