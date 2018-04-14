@@ -1,0 +1,128 @@
+var table = {
+	"1", "2", "3",
+	"4", "5", "6",
+	"7", "8", "9",
+};
+
+var player1 = "X";
+var player2 = "O";
+
+func print_table() {
+	println("   |   |   ");
+	println(" ", table[0], " | ", table[1], " | ", table[2]);
+	println("___|___|___");
+	
+	println("   |   |   ");
+	println(" ", table[3], " | ", table[4], " | ", table[5]);
+	println("___|___|___");
+	
+	println("   |   |   ");
+	println(" ", table[6], " | ", table[7], " | ", table[8]);
+	println("   |   |   ");
+}
+
+
+func check_win(player) {
+	if table[0] == player && table[1] == player && table[2] == player {
+		return 1;
+	}
+	if table[3] == player && table[4] == player && table[5] == player {
+		return 1;
+	}
+	if table[6] == player && table[7] == player && table[8] == player {
+		return 1;
+	}
+	
+	if table[0] == player && table[3] == player && table[6] == player {
+		return 1;
+	}
+	if table[1] == player && table[4] == player && table[7] == player {
+		return 1;
+	}
+	if table[2] == player && table[5] == player && table[8] == player {
+		return 1;
+	}
+	
+	if table[0] == player && table[4] == player && table[8] == player {
+		return 1;
+	}
+	if table[6] == player && table[4] == player && table[2] == player {
+		return 1;
+	}
+	
+	return 0;
+}
+
+func get_player_input(player, other_player) {
+	var nstring = input("'", player, "' select your square: ");
+	println();
+	var n = str2num(nstring);
+	if type(n) == "null" {
+		println("Please enter a number!");
+		print_table();
+		return get_player_input(player, other_player);
+	} else if n < 1 || n > 9 {
+		println("Please enter a number between 1 and 9!");
+		print_table();
+		return get_player_input(player, other_player);
+	} else {
+		var sq = table[n-1];
+		if type(sq) == "null" {
+			println("Your number is between 1 and 9 but not an integer! Bad player!");
+			print_table();
+			return get_player_input(player, other_player);
+		}
+		var sqn = str2num(sq);
+		if type(sqn) == "null" {
+			println("Square is already occupied, please select another one!");
+			print_table();
+			return get_player_input(player, other_player);
+		}
+	}
+	
+	return n;
+}
+
+func play_round(player, other_player) {
+	print_table();
+	var n = get_player_input(player, other_player);
+	table[n-1] = player;
+}
+
+//TODO:
+// - Add some way to convert or floor numbers, that way 8.8 -> 8
+func main(args) {
+	var current_player = 0;
+	var round = 0;
+	
+	while(1) {
+		if current_player == 0 {
+			// player1
+			play_round(player1, player2);
+			if check_win(player1) {
+				println(player1, " won the game!");
+				print_table();
+				return;
+			} else {
+				current_player = 1;
+			}
+		} else {
+			// player2
+			play_round(player2, player1);
+			if check_win(player2) {
+				println(player2, " won the game!");
+				print_table();
+				return;
+			} else {
+				current_player = 0;
+			}
+		}
+		
+		round = round + 1;
+		if round == 9 {
+			print_table();
+			println("It's a tie!");
+			return;
+		}
+	}
+}

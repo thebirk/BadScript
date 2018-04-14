@@ -12,6 +12,12 @@ typedef struct Stmt Stmt;
 typedef Array(Stmt*) StmtArray;
 
 Value* eval_value(Ir *ir, Scope *scope, Value *v);
+void table_put(Ir *ir, Value *table, Value *key, Value *expr);
+void table_put_name(Ir *ir, Value *table, String name, Value *expr);
+Value* call_function(Ir *ir, Value *func_value, ValueArray args);
+StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes);
+Value* expr_to_value(Ir *ir, Node *n);
+void add_globals(Ir *ir); // Found in runtime.c
 
 #ifdef _WIN32
 __declspec(noreturn)
@@ -291,7 +297,13 @@ void ir_error(Ir *ir, char *format, ...) {
 	va_end(args);
 	printf("\n");
 	print_stacktrace(ir);
-	assert(!"ir_error assert for dev");
+
+#ifdef _WIN32
+	if (IsDebuggerPresent()) {
+		assert(!"ir_error assert for dev");
+	}
+#endif
+
 	exit(1);
 }
 
@@ -322,8 +334,6 @@ Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
 	return stmt;
 }
 
-StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes);
-Value* expr_to_value(Ir *ir, Node *n);
 Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 	switch (n->kind) {
 	case NODE_VAR: {
@@ -447,7 +457,6 @@ void convert_top_levels_to_ir(Ir *ir, NodeArray stmts) {
 	}
 }
 
-void add_globals(Ir *ir); // Found in runtime.c
 void init_ir(Ir *ir, NodeArray stmts) {
 	array_init(ir->value_memory, 512);
 	ir->global_scope = make_scope(ir, 0);
@@ -463,9 +472,6 @@ void ir_import_file(Ir *ir, String path) {
 
 }
 
-void table_put(Ir *ir, Value *table, Value *key, Value *expr);
-void table_put_name(Ir *ir, Value *table, String name, Value *expr);
-Value* call_function(Ir *ir, Value *func_value, ValueArray args);
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	ir->loc = stmt->loc;
@@ -777,14 +783,15 @@ uint64_t hash_value(Ir *ir, Value *v) {
 	case VALUE_NULL: return hash_ptr(null_value);
 	case VALUE_NUMBER: {
 		uint64_t num = 0;
-		memcpy(&num, &v->number.value, 8);
+		assert(sizeof(uint64_t) == sizeof(double));
+		memcpy(&num, &v->number.value, sizeof(uint64_t));
 		return hash_uint64(num);
 	}
 	case VALUE_STRING: {
 		return hash_bytes(v->string.str.str, v->string.str.len);
 	}
 	case VALUE_TABLE: {
-		ir_error(ir, "A table cannot be used an index");
+		ir_error(ir, "A table cannot be used as an index");
 	}
 	case VALUE_NAME: {
 		return hash_bytes(v->name.name.str, v->name.name.len);
@@ -870,7 +877,7 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 				case ENTRY_KEY: {     // name = v
 					Value *name = expr_to_value(ir, e->key);
 					if (!isname(name) && !isstring(name)) {
-						ir_error(ir, "Expected lhs of assignment to be a name or string!");
+						ir_error(ir, "Expected left hand side of assignment to be a name or string!");
 					}
 					table_put(ir, t, name, expr_to_value(ir, e->expr));
 				} break;

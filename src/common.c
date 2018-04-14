@@ -101,22 +101,12 @@ typedef struct MapEntry {
 } MapEntry;
 
 // Taken from - https://github.com/pervognsen/bitwise/blob/master/ion/common.c
-// NOTE: The zero key is reserved as null, thats why we do len < cap and not len <= cap
+// This is a mess, I have no idea if this is even a remotely good map now.
 typedef struct Map{
 	MapEntry *entries;
 	size_t len;
 	size_t cap;
 } Map;
-
-uint64_t hash_uint64(uint64_t v) {
-	v *= 0xff51afd7ed558ccd;
-	v ^= v >> 32;
-	return v;
-}
-
-uint64_t hash_ptr(void *ptr) {
-	return hash_uint64((uintptr_t)ptr);
-}
 
 uint64_t hash_bytes(const char *buf, size_t len) {
 	uint64_t x = 0xcbf29ce484222325;
@@ -128,6 +118,18 @@ uint64_t hash_bytes(const char *buf, size_t len) {
 	return x;
 }
 
+uint64_t hash_uint64(uint64_t v) {
+	//v *= 0xff51afd7ed558ccd;
+	//v ^= v >> 32;
+	//return v;
+	uint8_t *bytes = (uint8_t*)&v;
+	return hash_bytes(bytes, sizeof(uint64_t));
+}
+
+uint64_t hash_ptr(void *ptr) {
+	return hash_uint64((uintptr_t)ptr);
+}
+
 #define IS_POW2(x) (((x) != 0) && ((x) & ((x)-1)) == 0)
 void* map_get(Map *map, uint64_t hash) {
 	if (map->len == 0) return 0;
@@ -135,7 +137,7 @@ void* map_get(Map *map, uint64_t hash) {
 	assert(IS_POW2(map->cap));
 	assert(map->len < map->cap);
 
-	uint64_t i = hash;
+	size_t i = (size_t)hash;
 	for (;;) {
 		i &= map->cap - 1;
 		MapEntry *entry = &map->entries[i];
@@ -193,6 +195,7 @@ void map_put_hash(Map *map, uint64_t hash, void *val) {
 			e->val = val;
 			return;
 		}
+		i++;
 	}
 }
 
