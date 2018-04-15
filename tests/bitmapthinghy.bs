@@ -1,0 +1,53 @@
+func make_bitmap(w, h) {
+	var bm = {
+		width = w,
+		height = h,
+		pixels = {},
+		
+		clear = bitmap_clear,
+		set   = bitmap_set,
+		print = bitmap_print,
+	};
+	
+	bm:clear(0);
+	
+	return bm;
+}
+
+func bitmap_clear(bm, color) {
+	var i = 0;
+	while i < bm.width * bm.height {
+		bm.pixels[i] = color;
+		i = i + 1;
+	}
+}
+
+func bitmap_set(bm, x, y, color) {
+	if x < 0 || x >= bm.width || y < 0 || y >= bm.height {
+		return;
+	}
+	bm.pixels[x+y*bm.width] = color;
+}
+
+func bitmap_print(bm) {
+	println("w: ", bm.width);
+	println("h: ", bm.height);
+	
+	var y = 0;
+	while y < bm.height {
+		var x = 0;
+		while x < bm.width {
+			print(bm.pixels[x+y*bm.width], ", ");
+			x = x + 1;
+		}
+		y = y + 1;
+		println();
+	}
+}
+
+func main(args) {
+	var bm = make_bitmap(8, 8);
+	bm:clear(10);
+	bm:set(2, 2, 2);
+	bm:print();
+}
