@@ -1,17 +1,14 @@
 // vec2 : {x, y}
-
-func vec2(x, y) {
+proc vec2(x, y) {
 	var v = {x = x, y = y};
 	
 	v.add = vec2_add;
 	v.sub = vec2_sub;
 	v.tostring = vec2_tostring;
+	v.length = vec2_length;
+	v.normalized = vec2_normalized;
 	
 	return v;
-}
-
-func vec2_tostring(v) {
-	return format("vec2{x = ", v.x, ", y = ", v.y, "}");
 }
 
 func vec2_add(a, b) {
@@ -20,4 +17,17 @@ func vec2_add(a, b) {
 
 func vec2_sub(a, b) {
 	return vec2(a.x-b.x, a.y-b.y);
+}
+
+func vec2_length(v) {
+	return sqrt(v.x*v.x + v.y*v.y);
+}
+
+func vec2_normalized(v) {
+	var len = v:length();
+	return vec2(v.x/len, v.y/len);
+}
+
+func vec2_tostring(v) {
+	return format("vec2{x = ", v.x, ", y = ", v.y, "}");
 }

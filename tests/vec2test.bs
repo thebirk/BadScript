@@ -5,4 +5,8 @@ func main(args) {
 	var b = vec2(2, 1);
 	var c = a.sub(a, b);
 	println(c.tostring(c));
+	
+	var normalized = vec2(1, 2):normalized();
+	println(normalized:tostring());
+	println("length of normalized: ", normalized:length());
 }

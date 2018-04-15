@@ -195,6 +195,33 @@ Value* runtime_table_len(Ir *ir, ValueArray args) {
 	return make_number_value(ir, (double)v->table.map.len);
 }
 
+Value* runtime_pow(Ir* ir, ValueArray args) {
+	if (args.size != 2) {
+		ir_error(ir, "pow() takes two argument");
+	}
+	Value *n = args.data[0];
+	Value *exp = args.data[1];
+
+	if (!isnumber(n) || !isnumber(exp)) {
+		ir_error(ir, "pow() takes two numbers as arguments");
+	}
+
+	return make_number_value(ir, pow(n->number.value, exp->number.value));
+}
+
+Value* runtime_sqrt(Ir* ir, ValueArray args) {
+	if (args.size != 1) {
+		ir_error(ir, "sqrt() takes one argument");
+	}
+	Value *n = args.data[0];
+
+	if (!isnumber(n)) {
+		ir_error(ir, "sqrt() takes one number");
+	}
+
+	return make_number_value(ir, sqrt(n->number.value));
+}
+
 Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_FUNCTION;
@@ -214,4 +241,6 @@ void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("input_hidden"), make_native_function(ir, runtime_input_hidden));
 	scope_add(ir, ir->global_scope, string("format"), make_native_function(ir, runtime_format));
 	scope_add(ir, ir->global_scope, string("len"), make_native_function(ir, runtime_table_len));
+	scope_add(ir, ir->global_scope, string("pow"), make_native_function(ir, runtime_pow));
+	scope_add(ir, ir->global_scope, string("sqrt"), make_native_function(ir, runtime_sqrt));
 }

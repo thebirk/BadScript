@@ -1,0 +1,7 @@
+func main(args) {
+	var a = 0;
+	while 1 {
+		a = a + 1;
+		println("a: ", a);
+	}
+}

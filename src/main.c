@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
 	
 #ifdef _WIN32
 	if (IsDebuggerPresent()) {
-		filename = make_string_slow("tests/argstest.bs");
+		filename = make_string_slow("tests/gctests.bs");
 		printf("Parsing: %s\n", filename.str);
 	}
 	else {

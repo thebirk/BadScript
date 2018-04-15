@@ -78,6 +78,12 @@ typedef enum ValueKind {
 
 struct Value {
 	ValueKind kind;
+
+	// Keeps track of all Values, temps
+	Value *next;
+	// To handle mark and sweep gc
+	bool gc_marked;
+
 	union {
 		struct {
 			double value;
@@ -265,10 +271,13 @@ typedef Array(StackCall) CallStack;
 typedef Array(Value) ValueMemory;
 struct Ir {
 	SourceLoc loc;
-	ValueMemory value_memory;
 	Scope *global_scope;
 	Scope *file_scope;
 	CallStack callstack;
+	Value *first_value; // Linked list of all values
+	
+	int allocated_values;
+	int max_allocated_values;
 };
 
 void print_stacktrace(Ir *ir) {
@@ -369,12 +378,193 @@ Value* table_get_name(Ir *ir, Value *table, String name) {
 	return map_get(&table->table.map, hash);
 }
 
-
+void do_gc(Ir *ir);
 Value* alloc_value(Ir *ir) {
-	return calloc(1, sizeof(Value));
-	//Value v = { 0 };
-	//array_add(ir->value_memory, v);
-	//return &ir->value_memory.data[ir->value_memory.size - 1];
+//	if (ir->allocated_values == ir->max_allocated_values) do_gc(ir);
+
+	Value *v = calloc(1, sizeof(Value));
+	ir->allocated_values++;
+
+	v->gc_marked = false;
+	v->next = ir->first_value;
+	ir->first_value = v;
+
+	return v;
+}
+
+void gc_mark(Value *v);
+void gc_mark_stmt(Stmt *stmt) {
+	switch (stmt->kind) {
+	case STMT_VAR: {
+		gc_mark(stmt->var.expr);
+	} break;
+	case STMT_ASSIGN: {
+		gc_mark(stmt->assign.left);
+		gc_mark(stmt->assign.right);
+	} break;
+	case STMT_RETURN: {
+		if (stmt->ret.expr) {
+			gc_mark(stmt->ret.expr);
+		}
+	} break;
+	case STMT_CALL: {
+		gc_mark(stmt->call.expr);
+		if (stmt->call.args.size > 0) {
+			Value *arg;
+			for_array(stmt->call.args, arg) {
+				gc_mark(arg);
+			}
+		}
+	} break;
+	case STMT_METHOD_CALL: {
+		gc_mark(stmt->method_call.expr);
+		if (stmt->method_call.args.size > 0) {
+			Value *arg;
+			for_array(stmt->method_call.args, arg) {
+				gc_mark(arg);
+			}
+		}
+	} break;
+	case STMT_IF: {
+		gc_mark(stmt->_if.cond);
+		gc_mark_stmt(stmt->_if.if_block);
+		if (stmt->_if.else_block) {
+			gc_mark_stmt(stmt->_if.else_block);
+		}
+	} break;
+	case STMT_WHILE: {
+		gc_mark(stmt->_while.cond);
+		gc_mark_stmt(stmt->_while.block);
+	} break;
+	case STMT_BLOCK: {
+		Stmt *st;
+		for_array(stmt->block.stmts, st) {
+			gc_mark_stmt(st);
+		}
+	} break;
+	}
+}
+
+void gc_mark_scope(Scope *scope) {
+	for (size_t i = 0; i <scope->symbols.cap; i++) {
+		MapEntry *e = &scope->symbols.entries[i];
+		if (e->hash) {
+			gc_mark((Value*)e->val);
+		}
+	}
+	if (scope->parent) {
+		gc_mark_scope(scope->parent);
+	}
+}
+
+void gc_mark(Value *v) {
+	if (v->gc_marked) return;
+	v->gc_marked = true;
+
+	switch (v->kind) {
+	case VALUE_BINOP: {
+		gc_mark(v->binary.lhs);
+		gc_mark(v->binary.rhs);
+	} break;
+	case VALUE_UNARY: {
+		gc_mark(v->unary.v);
+	} break;
+	case VALUE_INDEX: {
+		gc_mark(v->index.expr);
+		gc_mark(v->index.index);
+	} break;
+	case VALUE_CALL: {
+		gc_mark(v->call.expr);
+		if (v->call.args.size > 0) {
+			Value *arg;
+			for_array(v->call.args, arg) {
+				gc_mark(arg);
+			}
+		}
+	} break;
+	case VALUE_FIELD: {
+		gc_mark(v->field.expr);
+	} break;
+	case VALUE_METHOD_CALL: {
+		gc_mark(v->method_call.expr);
+		if (v->method_call.args.size > 0) {
+			Value *arg;
+			for_array(v->method_call.args, arg) {
+				gc_mark(arg);
+			}
+		}
+	} break;
+	case VALUE_FUNCTION: {
+		Function *f = &v->func;
+		switch (f->kind) {
+		case FUNCTION_NORMAL: {
+			gc_mark_scope(f->normal.scope);
+			
+
+			Stmt *stmt;
+			for_array(f->normal.stmts, stmt) {
+				gc_mark_stmt(stmt);
+			}
+		} break;
+		case FUNCTION_NATIVE: {
+
+		} break;
+		case FUNCTION_FFI: {
+			assert(!"Nope!");
+		}
+		}
+	} break;
+	case VALUE_TABLE: {
+		for (size_t i = 0; i < v->table.map.cap; i++) {
+			MapEntry *e = &v->table.map.entries[i];
+			if (e->hash) {
+				gc_mark((Value*)e->val);
+			}
+		}
+	} break;
+	}
+}
+
+void gc_mark_all(Ir *ir) {
+	for (size_t i = 0; i < ir->global_scope->symbols.cap; i++) {
+		MapEntry *e = &ir->global_scope->symbols.entries[i];
+		if (e->hash) {
+			gc_mark((Value*) e->val);
+		}
+	}
+	for (size_t i = 0; i < ir->file_scope->symbols.cap; i++) {
+		MapEntry *e = &ir->file_scope->symbols.entries[i];
+		if (e->hash) {
+			gc_mark((Value*)e->val);
+		}
+	}
+}
+
+void gc_sweep(Ir *ir) {
+	Value *v = ir->first_value;
+	while (v) {
+		if (!v->gc_marked) {
+			Value *unreached = v;
+			v = unreached->next;
+			free(unreached);
+			ir->allocated_values--;
+		}
+		else {
+			v->gc_marked = false;
+			v = v->next;
+		}
+	}
+}
+
+void do_gc(Ir *ir) {
+	int values_before_gc = ir->allocated_values;
+
+	gc_mark_all(ir);
+	gc_sweep(ir);
+
+	ir->max_allocated_values = ir->allocated_values * 2;
+	printf("Values before gc: %d\n", values_before_gc);
+	printf("Values after  gc: %d\n", ir->allocated_values);
 }
 
 Value* make_string_value(Ir *ir, String str) {
@@ -551,10 +741,12 @@ void ir_import_file(Ir *ir, String path) {
 }
 
 void init_ir(Ir *ir, NodeArray stmts) {
-	array_init(ir->value_memory, 512);
 	ir->global_scope = make_scope(ir, 0);
 	ir->file_scope = make_scope(ir, ir->global_scope);
 	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
+	ir->max_allocated_values = 2;
+	ir->allocated_values = 0;
+	ir->first_value = 0;
 
 	add_globals(ir);
 }
@@ -624,6 +816,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 			ir_error(ir, "':' operator only works with tables as lvalues");
 		}
 
+		//TODO: Give error if value from table is null
 		Value *func = table_get_name(ir, table, stmt->method_call.name);
 		if (!isfunction(func)) {
 			ir_error(ir, "Right hand side of ':' operator is not a function");

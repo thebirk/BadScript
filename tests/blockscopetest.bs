@@ -1,0 +1,6 @@
+func main(args) {
+	{
+		var a = "Hello, world";
+	}
+	println(a); // Should error
+}
