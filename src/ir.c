@@ -18,6 +18,8 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args, bool is_method_
 StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes);
 Value* expr_to_value(Ir *ir, Node *n);
 void add_globals(Ir *ir); // Found in runtime.c
+void do_gc(Ir *ir);
+void gc_mark_scope(Scope *scope);
 
 #ifdef _WIN32
 __declspec(noreturn)
@@ -144,9 +146,13 @@ typedef enum StmtKind {
 	STMT_BLOCK,
 } StmtKind;
 
-typedef struct Stmt {
+struct Stmt {
 	StmtKind kind;
 	SourceLoc loc;
+
+	Stmt *next;
+	bool gc_marked;
+
 	union {
 		struct {
 			String name;
@@ -184,19 +190,89 @@ typedef struct Stmt {
 			Stmt *block;
 		} _while;
 		struct {
+			Scope *scope;
 			StmtArray stmts;
 		} block;
 	};
-} Stmt;
+};
+
+typedef struct StackCall {
+	SourceLoc loc;
+	String name;
+	FunctionKind kind;
+} StackCall;
+typedef Array(StackCall) CallStack;
+
+typedef Array(Value) ValueMemory;
+struct Ir {
+	SourceLoc loc;
+	Scope *global_scope;
+	Scope *file_scope;
+	CallStack callstack;
+
+	// Linked lists of all allocated data
+	Value *first_value;
+	Scope *first_scope;
+	Stmt *first_stmt;
+	
+	int allocated_values;
+	int max_allocated_values;
+	bool do_gc;
+};
+
+void print_stacktrace(Ir *ir) {
+	assert(ir->callstack.size);
+	
+	for (int i = (int)ir->callstack.size - 1; i >= 0; i--) {
+	//for (int i = 0; i < (int)ir->callstack.size; i++) {
+		StackCall *c = &ir->callstack.data[i];
+		char *type = "";
+		if (c->kind == FUNCTION_NATIVE) {
+			type = "native:";
+		}
+		else if (c->kind == FUNCTION_FFI) {
+			type = "ffi:";
+		}
+		printf("    %s%.*s() - %.*s:(%d)\n", type, (int)c->name.len, c->name.str, (int)c->loc.file.len, c->loc.file.str, (int)c->loc.line);
+	}
+}
+
+void push_call(Ir *ir, StackCall call) {
+	array_add(ir->callstack, call);
+}
+
+void pop_call(Ir *ir) {
+	ir->callstack.size--;
+}
 
 typedef struct Scope Scope;
 struct Scope {
 	Scope *parent;
 	Map symbols; // char*, Value*
+
+	Scope *next;
+	bool gc_marked;
 };
 
 Scope* alloc_scope(Ir *ir) {
-	return calloc(1, sizeof(Scope));
+	do_gc(ir);
+
+	Scope *scope = calloc(1, sizeof(Scope));
+	memset(scope, 0, sizeof(Scope));
+
+	scope->next = ir->first_scope;
+	ir->first_scope = scope;
+	ir->allocated_values++;
+
+	return scope;
+}
+
+Scope* make_scope_no_gc(Ir *ir, Scope *parent) {
+	Scope *scope = calloc(1, sizeof(Scope));
+
+	scope->parent = parent;
+
+	return scope;
 }
 
 Scope* make_scope(Ir *ir, Scope *parent) {
@@ -259,50 +335,6 @@ void scope_set(Ir* ir, Scope *scope, String name, Value *v) {
 			ir_error(ir, "Symbol '%*.s' does not exist.", (int)name.len, name.str);
 		}
 	}
-}
-
-typedef struct StackCall {
-	SourceLoc loc;
-	String name;
-	FunctionKind kind;
-} StackCall;
-typedef Array(StackCall) CallStack;
-
-typedef Array(Value) ValueMemory;
-struct Ir {
-	SourceLoc loc;
-	Scope *global_scope;
-	Scope *file_scope;
-	CallStack callstack;
-	Value *first_value; // Linked list of all values
-	
-	int allocated_values;
-	int max_allocated_values;
-};
-
-void print_stacktrace(Ir *ir) {
-	assert(ir->callstack.size);
-	
-	for (int i = (int)ir->callstack.size - 1; i >= 0; i--) {
-	//for (int i = 0; i < (int)ir->callstack.size; i++) {
-		StackCall *c = &ir->callstack.data[i];
-		char *type = "";
-		if (c->kind == FUNCTION_NATIVE) {
-			type = "native:";
-		}
-		else if (c->kind == FUNCTION_FFI) {
-			type = "ffi:";
-		}
-		printf("    %s%.*s() - %.*s:(%d)\n", type, (int)c->name.len, c->name.str, (int)c->loc.file.len, c->loc.file.str, (int)c->loc.line);
-	}
-}
-
-void push_call(Ir *ir, StackCall call) {
-	array_add(ir->callstack, call);
-}
-
-void pop_call(Ir *ir) {
-	ir->callstack.size--;
 }
 
 #ifdef _WIN32
@@ -378,9 +410,8 @@ Value* table_get_name(Ir *ir, Value *table, String name) {
 	return map_get(&table->table.map, hash);
 }
 
-void do_gc(Ir *ir);
 Value* alloc_value(Ir *ir) {
-//	if (ir->allocated_values == ir->max_allocated_values) do_gc(ir);
+	do_gc(ir);
 
 	Value *v = calloc(1, sizeof(Value));
 	ir->allocated_values++;
@@ -394,6 +425,9 @@ Value* alloc_value(Ir *ir) {
 
 void gc_mark(Value *v);
 void gc_mark_stmt(Stmt *stmt) {
+	if (stmt->gc_marked) return;
+	stmt->gc_marked = true;
+
 	switch (stmt->kind) {
 	case STMT_VAR: {
 		gc_mark(stmt->var.expr);
@@ -437,6 +471,9 @@ void gc_mark_stmt(Stmt *stmt) {
 		gc_mark_stmt(stmt->_while.block);
 	} break;
 	case STMT_BLOCK: {
+		if (stmt->block.scope) {
+			gc_mark_scope(stmt->block.scope);
+		}
 		Stmt *st;
 		for_array(stmt->block.stmts, st) {
 			gc_mark_stmt(st);
@@ -446,6 +483,9 @@ void gc_mark_stmt(Stmt *stmt) {
 }
 
 void gc_mark_scope(Scope *scope) {
+	if (scope->gc_marked) return;
+	scope->gc_marked = true;
+
 	for (size_t i = 0; i <scope->symbols.cap; i++) {
 		MapEntry *e = &scope->symbols.entries[i];
 		if (e->hash) {
@@ -526,37 +566,78 @@ void gc_mark(Value *v) {
 }
 
 void gc_mark_all(Ir *ir) {
-	for (size_t i = 0; i < ir->global_scope->symbols.cap; i++) {
-		MapEntry *e = &ir->global_scope->symbols.entries[i];
-		if (e->hash) {
-			gc_mark((Value*) e->val);
+	if (ir->global_scope && ir->global_scope->symbols.cap > 0) {
+		for (size_t i = 0; i < ir->global_scope->symbols.cap; i++) {
+			MapEntry *e = &ir->global_scope->symbols.entries[i];
+			if (e->hash) {
+				gc_mark((Value*)e->val);
+			}
 		}
 	}
-	for (size_t i = 0; i < ir->file_scope->symbols.cap; i++) {
-		MapEntry *e = &ir->file_scope->symbols.entries[i];
-		if (e->hash) {
-			gc_mark((Value*)e->val);
+	if (ir->file_scope && ir->file_scope->symbols.cap > 0) {
+		for (size_t i = 0; i < ir->file_scope->symbols.cap; i++) {
+			MapEntry *e = &ir->file_scope->symbols.entries[i];
+			if (e->hash) {
+				gc_mark((Value*)e->val);
+			}
 		}
 	}
 }
 
 void gc_sweep(Ir *ir) {
-	Value *v = ir->first_value;
-	while (v) {
-		if (!v->gc_marked) {
-			Value *unreached = v;
-			v = unreached->next;
-			free(unreached);
-			ir->allocated_values--;
+	{
+		Value **v = &ir->first_value;
+		while (*v) {
+			if (!(*v)->gc_marked) {
+				Value *unreached = *v;
+				*v = unreached->next;
+				free(unreached);
+				ir->allocated_values--;
+			}
+			else {
+				(*v)->gc_marked = false;
+				v = &(*v)->next;
+			}
 		}
-		else {
-			v->gc_marked = false;
-			v = v->next;
+	}
+
+	{
+		Scope **scope = &ir->first_scope;
+		while (*scope) {
+			if (!(*scope)->gc_marked) {
+				Scope *unreached = *scope;
+				*scope = unreached->next;
+				free(unreached);
+				ir->allocated_values--;
+			}
+			else {
+				(*scope)->gc_marked = false;
+				scope = &(*scope)->next;
+			}
+		}
+	}
+
+	{
+		Stmt **stmt = &ir->first_stmt;
+		while (*stmt) {
+			if (!(*stmt)->gc_marked) {
+				Stmt *unreached = *stmt;
+				*stmt = unreached->next;
+				free(unreached);
+				ir->allocated_values--;
+			}
+			else {
+				(*stmt)->gc_marked = false;
+				stmt = &(*stmt)->next;
+			}
 		}
 	}
 }
 
 void do_gc(Ir *ir) {
+	if (ir->allocated_values < ir->max_allocated_values) return;
+	if (!ir->do_gc) return;
+
 	int values_before_gc = ir->allocated_values;
 
 	gc_mark_all(ir);
@@ -582,7 +663,14 @@ Value* make_number_value(Ir *ir, double n) {
 }
 
 Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
+	do_gc(ir);
+
 	Stmt *stmt = calloc(1, sizeof(Stmt));
+
+	stmt->next = ir->first_stmt;
+	ir->first_stmt = stmt;
+	ir->allocated_values++;
+
 	stmt->loc = loc;
 	return stmt;
 }
@@ -741,14 +829,20 @@ void ir_import_file(Ir *ir, String path) {
 }
 
 void init_ir(Ir *ir, NodeArray stmts) {
-	ir->global_scope = make_scope(ir, 0);
-	ir->file_scope = make_scope(ir, ir->global_scope);
-	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
-	ir->max_allocated_values = 2;
+	ir->do_gc = false;
+	ir->max_allocated_values = 1024;
 	ir->allocated_values = 0;
 	ir->first_value = 0;
+	ir->first_scope = 0;
+	ir->first_stmt = 0;
+
+	ir->global_scope = make_scope_no_gc(ir, 0);
+	ir->file_scope = make_scope_no_gc(ir, ir->global_scope);
+	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
 
 	add_globals(ir);
+
+	ir->do_gc = true;
 }
 
 // True if we had a return,break,continue, etc
@@ -874,10 +968,10 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	} break;
 	case STMT_BLOCK: {
 		if (stmt->block.stmts.size > 0) {
-			Scope *block_scope = make_scope(ir, scope);
+			stmt->block.scope = make_scope(ir, scope);
 			Stmt *block_stmt;
 			for_array(stmt->block.stmts, block_stmt) {
-				bool returned = eval_stmt(ir, block_scope, block_stmt, return_value);
+				bool returned = eval_stmt(ir, stmt->block.scope, block_stmt, return_value);
 				if (returned) return returned;
 			}
 		}

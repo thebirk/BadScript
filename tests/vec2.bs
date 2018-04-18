@@ -1,5 +1,5 @@
 // vec2 : {x, y}
-proc vec2(x, y) {
+func vec2(x, y) {
 	var v = {x = x, y = y};
 	
 	v.add = vec2_add;

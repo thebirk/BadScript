@@ -1,0 +1,9 @@
+func main(args) {
+//	len(0); // this should have native:len at the top of the callstack
+	
+	var t = {1,2, "string", v = 321, [0] = 3};
+	println(len(t));
+	
+	var out = format("t[0] = ", t[0]);
+	println(out);
+}

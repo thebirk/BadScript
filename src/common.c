@@ -1,4 +1,4 @@
-typedef struct {
+typedef struct String {
 	char *str;
 	size_t len;
 } String;
