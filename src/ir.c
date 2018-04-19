@@ -591,6 +591,46 @@ void gc_sweep(Ir *ir) {
 			if (!(*v)->gc_marked) {
 				Value *unreached = *v;
 				*v = unreached->next;
+
+				switch (unreached->kind) {
+				case VALUE_STRING: {
+					//TODO: Replace with string_free
+					free(unreached->string.str.str);
+				} break;
+				case VALUE_TABLE: {
+					map_free(&unreached->table.map);
+				} break;
+				case VALUE_NAME: {
+					free(unreached->name.name.str);
+				} break;
+				case VALUE_FIELD: {
+					free(unreached->field.name.str);
+				} break;
+				case VALUE_METHOD_CALL: {
+					free(unreached->method_call.name.str);
+					array_free(unreached->method_call.args);
+				} break;
+				case VALUE_CALL: {
+					array_free(unreached->call.args);
+				} break;
+				case VALUE_TABLE_CONSTANT: {
+					array_free(unreached->table_constant.entries);
+				} break;
+				case VALUE_FUNCTION: {
+					switch (unreached->func.kind) {
+					case FUNCTION_NORMAL: {
+						if (unreached->func.normal.arg_names.size > 0) {
+							String *str;
+							for_array_ref(unreached->func.normal.arg_names, str) {
+								free(str->str);
+							}
+						}
+						array_free(unreached->func.normal.stmts);
+						array_free(unreached->func.normal.arg_names);
+					} break;
+					}
+				} break;
+				}
 				free(unreached);
 				ir->allocated_values--;
 			}
@@ -607,6 +647,7 @@ void gc_sweep(Ir *ir) {
 			if (!(*scope)->gc_marked) {
 				Scope *unreached = *scope;
 				*scope = unreached->next;
+				map_free(&unreached->symbols);
 				free(unreached);
 				ir->allocated_values--;
 			}
@@ -623,6 +664,23 @@ void gc_sweep(Ir *ir) {
 			if (!(*stmt)->gc_marked) {
 				Stmt *unreached = *stmt;
 				*stmt = unreached->next;
+				
+				switch(unreached->kind) {
+				case STMT_VAR: {
+					free(unreached->var.name.str);
+				} break;
+				case STMT_CALL: {
+					array_free(unreached->call.args);
+				} break;
+				case STMT_METHOD_CALL: {
+					array_free(unreached->method_call.args);
+					free(unreached->method_call.name.str);
+				} break;
+				case STMT_BLOCK: {
+					array_free(unreached->block.stmts);
+				} break;
+				}
+
 				free(unreached);
 				ir->allocated_values--;
 			}
@@ -638,6 +696,8 @@ void do_gc(Ir *ir) {
 	if (ir->allocated_values < ir->max_allocated_values) return;
 	if (!ir->do_gc) return;
 
+	//TODO: Split between couting values,scopes and stmts
+	//TODO: Add pool allocators for values,scopes and stms and have the gc reuse freed pools.
 	int values_before_gc = ir->allocated_values;
 
 	gc_mark_all(ir);
@@ -830,7 +890,7 @@ void ir_import_file(Ir *ir, String path) {
 
 void init_ir(Ir *ir, NodeArray stmts) {
 	ir->do_gc = false;
-	ir->max_allocated_values = 1024;
+	ir->max_allocated_values = 2;
 	ir->allocated_values = 0;
 	ir->first_value = 0;
 	ir->first_scope = 0;
@@ -903,6 +963,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 			}
 		}
 		call_function(ir, func, args, false);
+		array_free(args);
 	} break;
 	case STMT_METHOD_CALL: {
 		Value *table = eval_value(ir, scope, stmt->method_call.expr);
@@ -927,6 +988,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		}
 
 		call_function(ir, func, args, true);
+		array_free(args);
 	} break;
 	case STMT_BREAK: {
 		IncompletePath();
@@ -1211,7 +1273,9 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 				array_add(args, v);
 			}
 		}
-		return eval_value(ir, scope, call_function(ir, func, args, false));
+		Value *ret = eval_value(ir, scope, call_function(ir, func, args, false));
+		array_free(args);
+		return ret;
 	} break;
 	case VALUE_METHOD_CALL: {
 		Value *table = eval_value(ir, scope, v->method_call.expr);
@@ -1235,8 +1299,8 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 		}
 
 		Value *result = call_function(ir, func, args, true);
+		array_free(args);
 		return eval_value(ir, scope, result);
-
 	} break;
 	case VALUE_TABLE_CONSTANT: {
 		Value *t = alloc_value(ir);

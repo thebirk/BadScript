@@ -218,6 +218,10 @@ void* map_get_string(Map *map, String str) {
 	return map_get(map, hash);
 }
 
+void map_free(Map *map) {
+	free(map->entries);
+}
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
