@@ -538,12 +538,15 @@ void gc_mark(Value *v) {
 		Function *f = &v->func;
 		switch (f->kind) {
 		case FUNCTION_NORMAL: {
-			gc_mark_scope(f->normal.scope);
+			if (f->normal.scope) {
+				gc_mark_scope(f->normal.scope);
+			}
 			
-
 			Stmt *stmt;
-			for_array(f->normal.stmts, stmt) {
-				gc_mark_stmt(stmt);
+			if (f->normal.stmts.size > 0) {
+				for_array(f->normal.stmts, stmt) {
+					gc_mark_stmt(stmt);
+				}
 			}
 		} break;
 		case FUNCTION_NATIVE: {
@@ -722,6 +725,14 @@ Value* make_number_value(Ir *ir, double n) {
 	return v;
 }
 
+Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
+	Value *v = alloc_value(ir);
+	v->kind = VALUE_FUNCTION;
+	v->func.kind = FUNCTION_NATIVE;
+	v->func.native.function = func;
+	return v;
+}
+
 Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
 	do_gc(ir);
 
@@ -843,6 +854,16 @@ StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes) {
 	return stmts;
 }
 
+void import_gfx(Ir *ir); // In gfx.c
+void ir_use_library(Ir *ir, String name) {
+	if (strings_match(string("gfx"), name)) {
+		import_gfx(ir);
+	}
+	else {
+		ir_error(ir, "Unknown library name after use: %.*s", (int)name.len, name.str);
+	}
+}
+
 void ir_import_file(Ir *ir, String path);
 void convert_top_levels_to_ir(Ir *ir, Scope *scope, NodeArray stmts) {
 	Node *n;
@@ -851,6 +872,9 @@ void convert_top_levels_to_ir(Ir *ir, Scope *scope, NodeArray stmts) {
 		switch (n->kind) {
 		case NODE_IMPORT: {
 			ir_import_file(ir, n->import.name);
+		} break;
+		case NODE_USE: {
+			ir_use_library(ir, n->use.name);
 		} break;
 		case NODE_VAR: {
 			Value *v = eval_value(ir, ir->file_scope, expr_to_value(ir, n->var.expr));
@@ -1063,13 +1087,13 @@ Value* eval_function(Ir *ir, Function func, ValueArray args, bool is_method_call
 	}
 
 	if (func.normal.stmts.size > 0) {
-		Scope *scope = make_scope(ir, ir->file_scope);
+		func.normal.scope = make_scope(ir, ir->file_scope);
 		for (int i = 0; i < args.size; i++) {
-			scope_add(ir, scope, func.normal.arg_names.data[i], args.data[i]);
+			scope_add(ir, func.normal.scope, func.normal.arg_names.data[i], args.data[i]);
 		}
 		Stmt *stmt;
 		for_array(func.normal.stmts, stmt) {
-			bool returned = eval_stmt(ir, scope, stmt, &return_value);
+			bool returned = eval_stmt(ir, func.normal.scope, stmt, &return_value);
 			if (returned) return return_value;
 		}
 	}

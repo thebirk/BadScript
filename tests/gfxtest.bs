@@ -1,0 +1,26 @@
+use "gfx";
+
+func main(args) {
+	if gfx.init() == 0 {
+		println("Failed to init gfx!");
+		return;
+	}
+	
+	if gfx.create_window("Hello BS!", 800, 600, 0) == 0 {
+		println("Failed to create gfx window!");
+		return;
+	}
+	
+	var running = 1;
+	while running {
+		gfx.clear();
+		
+		
+		
+		gfx.present();
+		gfx.update();
+		if gfx.should_close() {
+			running = 0;
+		}
+	}
+}

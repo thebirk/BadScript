@@ -222,14 +222,6 @@ Value* runtime_sqrt(Ir* ir, ValueArray args) {
 	return make_number_value(ir, sqrt(n->number.value));
 }
 
-Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
-	Value *v = alloc_value(ir);
-	v->kind = VALUE_FUNCTION;
-	v->func.kind = FUNCTION_NATIVE;
-	v->func.native.function = func;
-	return v;
-}
-
 void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("print"), make_native_function(ir, runtime_print));
 	scope_add(ir, ir->global_scope, string("println"), make_native_function(ir, runtime_println));

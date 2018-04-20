@@ -14,6 +14,7 @@
 #include "lexer.c"
 #include "parser.c"
 #include "ir.c"
+#include "gfx.c"
 #include "runtime.c"
 
 void print_usage(char *binary_name) {
@@ -59,21 +60,11 @@ int main(int argc, char **argv) {
 		}
 	}
 	
-#ifdef _WIN32
-	if (IsDebuggerPresent()) {
-		filename = make_string_slow("tests/gctests.bs");
-		printf("Parsing: %s\n", filename.str);
+	if (filename.str == 0) {
+		printf("No file was provided!\n");
+		print_usage(argv[0]);
+		exit(1);
 	}
-	else {
-#endif
-		if (filename.str == 0) {
-			printf("No file was provided!\n");
-			print_usage(argv[0]);
-			exit(1);
-		}
-#ifdef _WIN32
-	}
-#endif
 	
 
 	if (silence) {
