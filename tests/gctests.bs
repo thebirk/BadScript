@@ -3,5 +3,11 @@ func main(args) {
 	while 1 {
 		a = a + 1;
 		println("a: ", a);
+		var t = {};
+		var i = 0;
+		while i < 1000 {
+			t[i] = i;
+			i = i + 1;
+		}
 	}
 }
