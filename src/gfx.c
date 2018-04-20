@@ -123,6 +123,34 @@ Value* gfx_clear(Ir *ir, ValueArray args) {
 	return null_value;
 }
 
+Value* gfx_fill_rect(Ir *ir, ValueArray args) {
+	if (!state.inited) {
+		ir_error(ir, "gfx.init has to be called before any other gfx function!");
+	}
+	if (args.size != 7) {
+		ir_error(ir, "gfx.fill_rect takes 7 arguments: x, y, width, height, r, g, b");
+	}
+
+	Value *x      = args.data[0];
+	Value *y      = args.data[1];
+	Value *width  = args.data[2];
+	Value *height = args.data[3];
+	Value *r      = args.data[4];
+	Value *g      = args.data[5];
+	Value *b      = args.data[6];
+
+	if (!isnumber(x) || !isnumber(y) ||
+		!isnumber(width) || !isnumber(height) ||
+		!isnumber(r) || !isnumber(g) || !isnumber(b)) {
+		ir_error(ir, "gfx.fill_rect takes 7 arguments: x, y, width, height, r, g, b");
+	}
+
+	SDL_SetRenderDrawColor(state.renderer, r->number.value, g->number.value, b->number.value, 255);
+	SDL_RenderFillRect(state.renderer, &(SDL_Rect) {x->number.value, y->number.value, width->number.value, height->number.value});
+
+	return null_value;
+}
+
 void import_gfx(Ir *ir) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_TABLE;
@@ -132,6 +160,7 @@ void import_gfx(Ir *ir) {
 	table_put_name(ir, v, make_string_slow("should_close"), make_native_function(ir, gfx_should_close));
 	table_put_name(ir, v, make_string_slow("clear"), make_native_function(ir, gfx_clear));
 	table_put_name(ir, v, make_string_slow("present"), make_native_function(ir, gfx_present));
+	table_put_name(ir, v, make_string_slow("fill_rect"), make_native_function(ir, gfx_fill_rect));
 
 	scope_add(ir, ir->global_scope, make_string_slow("gfx"), v);
 }

@@ -12,10 +12,16 @@ func main(args) {
 	}
 	
 	var running = 1;
+	
+	var x = 0;
+	var y = 0;
+	
 	while running {
 		gfx.clear();
 		
-		
+		gfx.fill_rect(x, y, 50, 50, 255, 127, 0);
+		x = x + 0.01;
+		y = y + 0.01;
 		
 		gfx.present();
 		gfx.update();
