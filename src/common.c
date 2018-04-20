@@ -36,6 +36,10 @@ String make_string_slow_len(char *c_str, size_t len) {
 	return result;
 }
 
+String make_string_copy(String s) {
+	return make_string_slow_len(s.str, s.len);
+}
+
 bool strings_match(String a, String b) {
 	if (a.len != b.len) return false;
 	if (a.len == b.len && a.str == b.str) return true;
@@ -165,6 +169,7 @@ void* map_get(Map *map, uint64_t hash) {
 void map_put_hash(Map *map, uint64_t hash, void *val);
 void map_grow(Map *map, size_t new_cap) {
 	new_cap = max(16, new_cap);
+	assert(IS_POW2(new_cap));
 	Map new_map = {
 		.entries = calloc(new_cap, sizeof(MapEntry)),
 		.cap = new_cap,

@@ -7,6 +7,7 @@ func vec2(x, y) {
 	v.tostring = vec2_tostring;
 	v.length = vec2_length;
 	v.normalized = vec2_normalized;
+	v.mul = vec2_mul;
 	
 	return v;
 }
@@ -19,12 +20,17 @@ func vec2_sub(a, b) {
 	return vec2(a.x-b.x, a.y-b.y);
 }
 
+func vec2_mul(a, b) {
+	return vec2(a.x * b, a.y * b);
+}
+
 func vec2_length(v) {
 	return sqrt(v.x*v.x + v.y*v.y);
 }
 
 func vec2_normalized(v) {
 	var len = v:length();
+	if len == 0 { return vec2(0, 0); }
 	return vec2(v.x/len, v.y/len);
 }
 

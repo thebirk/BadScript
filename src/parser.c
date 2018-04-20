@@ -551,7 +551,7 @@ Node* expr_operand(Parser *p) {
 Node* expr_base(Parser *p) {
 	Node *expr = expr_operand(p);
 
-	while (is_token(p, TOKEN_LEFTPAR) || is_token(p, TOKEN_LEFTBRACKET) || is_token(p, TOKEN_DOT) || is_token(p, TOKEN_COLON)) {
+	while (is_token(p, TOKEN_LEFTPAR) || is_token(p, TOKEN_LEFTBRACKET) || is_token(p, TOKEN_DOT) || is_token(p, TOKEN_COLON) || is_token(p, TOKEN_INCREMENT) || is_token(p, TOKEN_DECREMENT) ) {
 		Token op = p->current_token; // Used to set the location of the nodes
 
 		if (match_token(p, TOKEN_LEFTBRACKET)) {
@@ -610,6 +610,13 @@ Node* expr_base(Parser *p) {
 			else {
 				parser_error(p, "Expected arguemnt list after ':' operator");
 			}
+		}
+		else if (match_token(p, TOKEN_INCREMENT)) {
+			int x = 0;
+			x++;
+		}
+		else if (match_token(p, TOKEN_DECREMENT)) {
+
 		}
 		else {
 			assert(!"Unsynced while cond and ifs");

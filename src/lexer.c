@@ -39,6 +39,8 @@ typedef enum TokenKind {
 	TOKEN_DOT,
 	TOKEN_IMPORT,
 	TOKEN_USE,
+	TOKEN_INCREMENT,
+	TOKEN_DECREMENT,
 	TOKEN_EOF,
 
 	LAST_TOKEN_KIND,
@@ -86,6 +88,8 @@ char* token_kind_to_string(TokenKind kind) {
 		case TOKEN_DOT:          return ".";
 		case TOKEN_IMPORT:       return "import";
 		case TOKEN_USE:          return "use";
+		case TOKEN_INCREMENT:          return "++";
+		case TOKEN_DECREMENT:          return "--";
 		case TOKEN_EOF:          return "(end of file)";
 
 		default: return "(unimplemented TokenKind name)";
@@ -311,6 +315,8 @@ void lex(Lexer *lexer) {
 		DOUBLE_TOKEN('!', '=', TOKEN_NE)
 		DOUBLE_TOKEN('&', '&', TOKEN_LAND)
 		DOUBLE_TOKEN('|', '|', TOKEN_LOR)
+		DOUBLE_TOKEN('+', '+', TOKEN_INCREMENT)
+		DOUBLE_TOKEN('-', '-', TOKEN_DECREMENT)
 #undef DOUBLE_TOKEN
 
 		switch (*ptr) {

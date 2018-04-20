@@ -1,0 +1,19 @@
+func make_point(x, y) {
+    return {x = x, y = y, set = point_set, tostring = point_tostring};
+}
+
+func point_set(p, x, y) {
+    p.x = x;
+    p.y = y;
+}
+
+func point_tostring(p) {
+    return format("(", p.x, ", ", p.y, ")");
+}
+
+func main(args) {
+    var p = make_point(1, 2);
+ 	println("Before: ", p:tostring());
+    p:set(3, 5);
+    println("After: ", p:tostring());
+}

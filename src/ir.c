@@ -35,7 +35,6 @@ typedef struct Function {
 	union {
 		struct {
 			StringArray arg_names;
-			Scope *scope;
 			StmtArray stmts;
 		} normal;
 		struct {
@@ -195,7 +194,6 @@ struct Stmt {
 			Stmt *block;
 		} _while;
 		struct {
-			Scope *scope;
 			StmtArray stmts;
 		} block;
 	};
@@ -209,11 +207,13 @@ typedef struct StackCall {
 typedef Array(StackCall) CallStack;
 
 typedef Array(Value) ValueMemory;
+typedef Array(Scope*) ScopeStack;
 struct Ir {
 	SourceLoc loc;
 	Scope *global_scope;
 	Scope *file_scope;
 	CallStack callstack;
+	ScopeStack scope_stack;
 
 	// Linked lists of all allocated data
 	Value *first_value;
@@ -248,6 +248,8 @@ void push_call(Ir *ir, StackCall call) {
 
 void pop_call(Ir *ir) {
 	ir->callstack.size--;
+	StackCall *call = &ir->callstack.data[ir->callstack.size];
+	free(call->name.str);
 }
 
 typedef struct Scope Scope;
@@ -260,7 +262,7 @@ struct Scope {
 };
 
 Scope* alloc_scope(Ir *ir) {
-	do_gc(ir);
+	//do_gc(ir);
 
 	Scope *scope = calloc(1, sizeof(Scope));
 	memset(scope, 0, sizeof(Scope));
@@ -286,6 +288,17 @@ Scope* make_scope(Ir *ir, Scope *parent) {
 	scope->parent = parent;
 
 	return scope;
+}
+
+Scope* push_scope(Ir *ir, Scope *parent) {
+	Scope *scope = make_scope(ir, parent);
+	array_add(ir->scope_stack, scope);
+	return scope;
+}
+
+void pop_scope(Ir *ir) {
+	assert(ir->scope_stack.size > 0);
+	ir->scope_stack.size--;
 }
 
 // Gets a symbol traveling up through the scope to find it
@@ -416,7 +429,7 @@ Value* table_get_name(Ir *ir, Value *table, String name) {
 }
 
 Value* alloc_value(Ir *ir) {
-	do_gc(ir);
+	//do_gc(ir);
 
 	Value *v = calloc(1, sizeof(Value));
 	ir->allocated_values++;
@@ -476,12 +489,11 @@ void gc_mark_stmt(Stmt *stmt) {
 		gc_mark_stmt(stmt->_while.block);
 	} break;
 	case STMT_BLOCK: {
-		if (stmt->block.scope) {
-			gc_mark_scope(stmt->block.scope);
-		}
 		Stmt *st;
-		for_array(stmt->block.stmts, st) {
-			gc_mark_stmt(st);
+		if (stmt->block.stmts.size > 0) {
+			for_array(stmt->block.stmts, st) {
+				gc_mark_stmt(st);
+			}
 		}
 	} break;
 	}
@@ -491,7 +503,7 @@ void gc_mark_scope(Scope *scope) {
 	if (scope->gc_marked) return;
 	scope->gc_marked = true;
 
-	for (size_t i = 0; i <scope->symbols.cap; i++) {
+	for (size_t i = 0; i < scope->symbols.cap; i++) {
 		MapEntry *e = &scope->symbols.entries[i];
 		if (e->hash) {
 			gc_mark((Value*)e->val);
@@ -543,10 +555,6 @@ void gc_mark(Value *v) {
 		Function *f = &v->func;
 		switch (f->kind) {
 		case FUNCTION_NORMAL: {
-			if (f->normal.scope) {
-				gc_mark_scope(f->normal.scope);
-			}
-			
 			Stmt *stmt;
 			if (f->normal.stmts.size > 0) {
 				for_array(f->normal.stmts, stmt) {
@@ -588,6 +596,12 @@ void gc_mark_all(Ir *ir) {
 			if (e->hash) {
 				gc_mark((Value*)e->val);
 			}
+		}
+	}
+	if (ir->scope_stack.size > 0) {
+		Scope *scope;
+		for_array(ir->scope_stack, scope) {
+			gc_mark_scope(scope);
 		}
 	}
 }
@@ -712,8 +726,8 @@ void do_gc(Ir *ir) {
 	gc_sweep(ir);
 
 	ir->max_allocated_values = ir->allocated_values * 2;
-	printf("Values before gc: %d\n", values_before_gc);
-	printf("Values after  gc: %d\n", ir->allocated_values);
+//	printf("Values before gc: %d\n", values_before_gc);
+//	printf("Values after  gc: %d\n", ir->allocated_values);
 }
 
 Value* make_string_value(Ir *ir, String str) {
@@ -739,7 +753,7 @@ Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 }
 
 Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
-	do_gc(ir);
+	//do_gc(ir);
 
 	Stmt *stmt = calloc(1, sizeof(Stmt));
 
@@ -756,7 +770,7 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 	case NODE_VAR: {
 		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_VAR;
-		stmt->var.name = n->var.name;
+		stmt->var.name = make_string_copy(n->var.name);
 		if (n->var.expr) {
 			stmt->var.expr = expr_to_value(ir, n->var.expr);
 		}
@@ -813,7 +827,7 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		Stmt *stmt = alloc_stmt(ir, n->loc);
 		stmt->kind = STMT_METHOD_CALL;
 		stmt->method_call.expr = expr_to_value(ir, n->method_call.expr);
-		stmt->method_call.name = n->method_call.name;
+		stmt->method_call.name = make_string_copy(n->method_call.name);
 		if (n->method_call.args.size > 0) {
 			Node *arg;
 			for_array(n->method_call.args, arg) {
@@ -890,9 +904,8 @@ void convert_top_levels_to_ir(Ir *ir, Scope *scope, NodeArray stmts) {
 			v->kind = VALUE_FUNCTION;
 			Function *f = &v->func;
 			f->kind = FUNCTION_NORMAL;
-			f->name = n->func.name;
+			f->name = make_string_copy(n->func.name);
 			f->loc = n->loc;
-			f->normal.scope = make_scope(ir, ir->file_scope);
 			f->normal.arg_names = n->func.args;
 			f->normal.stmts = convert_nodes_to_stmts(ir, n->func.block->block.stmts);
 
@@ -937,6 +950,7 @@ void init_ir(Ir *ir, NodeArray stmts) {
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	ir->loc = stmt->loc;
+	do_gc(ir);
 	switch (stmt->kind) {
 	case STMT_VAR: {
 		Value *v = eval_value(ir, scope, stmt->var.expr);
@@ -1059,12 +1073,16 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	} break;
 	case STMT_BLOCK: {
 		if (stmt->block.stmts.size > 0) {
-			stmt->block.scope = make_scope(ir, scope);
+			Scope *block_scope = push_scope(ir, scope);
 			Stmt *block_stmt;
 			for_array(stmt->block.stmts, block_stmt) {
-				bool returned = eval_stmt(ir, stmt->block.scope, block_stmt, return_value);
-				if (returned) return returned;
+				bool returned = eval_stmt(ir, block_scope, block_stmt, return_value);
+				if (returned) {
+					pop_scope(ir);
+					return returned;
+				}
 			}
+			pop_scope(ir);
 		}
 	} break;
 	default: {
@@ -1092,15 +1110,20 @@ Value* eval_function(Ir *ir, Function func, ValueArray args, bool is_method_call
 	}
 
 	if (func.normal.stmts.size > 0) {
-		func.normal.scope = make_scope(ir, ir->file_scope);
+		Scope *scope = push_scope(ir, ir->file_scope);
 		for (int i = 0; i < args.size; i++) {
-			scope_add(ir, func.normal.scope, func.normal.arg_names.data[i], args.data[i]);
+			scope_add(ir, scope, func.normal.arg_names.data[i], args.data[i]);
 		}
 		Stmt *stmt;
 		for_array(func.normal.stmts, stmt) {
-			bool returned = eval_stmt(ir, func.normal.scope, stmt, &return_value);
-			if (returned) return return_value;
+			bool returned = eval_stmt(ir, scope, stmt, &return_value);
+			if (returned) {
+				pop_scope(ir);
+				return return_value;
+			}
 		}
+
+		pop_scope(ir);
 	}
 
 	return return_value;
@@ -1117,7 +1140,7 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args, bool is_method_
 		StackCall call = { 0 };
 		call.loc = func.loc;
 		call.kind = func.kind;
-		call.name = func.name;
+		call.name = make_string_copy(func.name);
 		push_call(ir, call);
 		return_value = eval_function(ir, func, args, is_method_call);
 		pop_call(ir);
@@ -1313,6 +1336,9 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 		}
 
 		Value *func = table_get_name(ir, table, v->method_call.name); // Should return null for non existing values
+		if (!func) {
+			ir_error(ir, "Table does not contain any value called: %.*s", (int)v->method_call.name.len, v->method_call.name.str);
+		}
 		if (!isfunction(func)) {
 			ir_error(ir, "Right hand side of ':' operator is not a function");
 		}
@@ -1426,7 +1452,7 @@ Value* expr_to_value(Ir *ir, Node *n) {
 	case NODE_NAME: {
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_NAME;
-		v->name.name = n->name.name;
+		v->name.name = make_string_copy(n->name.name);
 		return v;
 	} break;
 	case NODE_TABLE: {
@@ -1454,7 +1480,7 @@ Value* expr_to_value(Ir *ir, Node *n) {
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_FIELD;
 		v->field.expr = expr_to_value(ir, n->field.expr);
-		v->field.name = n->field.name;
+		v->field.name = make_string_copy(n->field.name);
 		return v;
 	} break;
 	case NODE_INDEX: {
@@ -1480,7 +1506,7 @@ Value* expr_to_value(Ir *ir, Node *n) {
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_METHOD_CALL;
 		v->method_call.expr = expr_to_value(ir, n->method_call.expr);
-		v->method_call.name = n->method_call.name;
+		v->method_call.name = make_string_copy(n->method_call.name);
 		if (n->method_call.args.size > 0) {
 			Node *arg;
 			for_array(n->method_call.args, arg) {
