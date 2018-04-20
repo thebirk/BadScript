@@ -41,6 +41,9 @@ typedef enum TokenKind {
 	TOKEN_USE,
 	TOKEN_INCREMENT,
 	TOKEN_DECREMENT,
+	TOKEN_TRUE,
+	TOKEN_FALSE,
+	TOKEN_AS,
 	TOKEN_EOF,
 
 	LAST_TOKEN_KIND,
@@ -88,8 +91,11 @@ char* token_kind_to_string(TokenKind kind) {
 		case TOKEN_DOT:          return ".";
 		case TOKEN_IMPORT:       return "import";
 		case TOKEN_USE:          return "use";
-		case TOKEN_INCREMENT:          return "++";
-		case TOKEN_DECREMENT:          return "--";
+		case TOKEN_INCREMENT:    return "++";
+		case TOKEN_DECREMENT:    return "--";
+		case TOKEN_TRUE:         return "true";
+		case TOKEN_FALSE:        return "false";
+		case TOKEN_AS:           return "as";
 		case TOKEN_EOF:          return "(end of file)";
 
 		default: return "(unimplemented TokenKind name)";
@@ -416,7 +422,10 @@ void lex(Lexer *lexer) {
 			KEYWORD(string("break"),    TOKEN_BREAK)
 			KEYWORD(string("null"),     TOKEN_NULL)
 			KEYWORD(string("import"),   TOKEN_IMPORT)
-			KEYWORD(string("use"), TOKEN_USE)
+			KEYWORD(string("use"),      TOKEN_USE)
+			KEYWORD(string("true"),     TOKEN_TRUE)
+			KEYWORD(string("false"),    TOKEN_FALSE)
+			KEYWORD(string("as"),       TOKEN_AS)
 #undef KEYWORD
 		}
 	}

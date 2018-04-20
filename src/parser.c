@@ -23,6 +23,7 @@ typedef enum NodeKind {
 	NODE_NULL,
 	NODE_IMPORT,
 	NODE_USE,
+	NODE_ANON_FUNC,
 } NodeKind;
 
 typedef enum TableEntryKind {
@@ -88,6 +89,10 @@ struct Node {
 			Node *block;
 		} func;
 		struct {
+			StringArray args;
+			Node *block;
+		} anon_func;
+		struct {
 			String name;
 			Node *expr;
 		} var;
@@ -125,6 +130,7 @@ struct Node {
 		struct { int unsued;  } _null;
 		struct {
 			String name;
+			String as;
 		} import;
 		struct {
 			String name;
@@ -165,14 +171,14 @@ Node* alloc_node(Parser *p) {
 	//return (Node*)&p->nodes.data[p->nodes.size-1];
 }
 
-Node* make_number(Parser *p, Token number) {
-	assert(number.kind == TOKEN_NUMBER);
+Node* make_number(Parser *p, Token number, double value) {
+	assert(number.kind == TOKEN_NUMBER || number.kind == TOKEN_TRUE || number.kind == TOKEN_FALSE);
 	Node *n = alloc_node(p);
 
 	n->loc = number.loc;
 
 	n->kind = NODE_NUMBER;
-	n->number.value = number.number_value;
+	n->number.value = value;
 
 	return n;
 }
@@ -408,6 +414,19 @@ Node* make_func(Parser *p, Token func, String name, StringArray args, Node *bloc
 	return n;
 }
 
+Node* make_anon_func(Parser *p, Token func, StringArray args, Node *block) {
+	assert(block && block->kind == NODE_BLOCK);
+	Node *n = alloc_node(p);
+
+	n->loc = func.loc;
+
+	n->kind = NODE_ANON_FUNC;
+	n->anon_func.args = args;
+	n->anon_func.block = block;
+
+	return n;
+}
+
 Node* make_table(Parser *p, Token t, TableEntryArray entries) {
 	Node *n = alloc_node(p);
 
@@ -477,11 +496,17 @@ void expect(Parser *p, TokenKind kind) {
 } while (0);
 
 Node* parse_expr(Parser *p);
-
+Node* parse_block(Parser *p);
 Node* expr_operand(Parser *p) {
 	Token t = p->current_token;
 	if (match_token(p, TOKEN_NUMBER)) {
-		return make_number(p, t);
+		return make_number(p, t, t.number_value);
+	}
+	else if (match_token(p, TOKEN_TRUE)) {
+		return make_number(p, t, 1);
+	}
+	else if (match_token(p, TOKEN_FALSE)) {
+		return make_number(p, t, 0);
 	}
 	else if (match_token(p, TOKEN_IDENT)) {
 		return make_name(p, t);
@@ -497,6 +522,31 @@ Node* expr_operand(Parser *p) {
 		Node *expr = parse_expr(p);
 		expect(p, TOKEN_RIGHTPAR);
 		return expr;
+	}
+	else if (match_token(p, TOKEN_FUNC)) {
+		if (!match_token(p, TOKEN_LEFTPAR)) {
+			parser_error(p, "Expected '(' after 'func' while parsing anonymous function");
+		}
+		StringArray args = { 0 };
+
+		if (!is_token(p, TOKEN_RIGHTPAR)) {
+			do {
+				if (is_token(p, TOKEN_IDENT)) {
+					String arg = p->current_token.lexeme;
+					next_token(p);
+					array_add(args, arg);
+				}
+				else {
+					parser_error(p, "Expected identifier while parsing argument list got '%s'", token_kind_to_string(p->current_token.kind));
+				}
+			} while (match_token(p, TOKEN_COMMA));
+		}
+		expect(p, TOKEN_RIGHTPAR);
+
+		Node *block = parse_block(p);
+
+		Node *func = make_anon_func(p, t, args, block);
+		return func;
 	}
 	else if (match_token(p, TOKEN_LEFTBRACE)) {
 		// {
@@ -935,7 +985,6 @@ Node* parse_import(Parser *p) {
 	if (match_token(p, TOKEN_IMPORT)) {
 		Token name = p->current_token;
 		expect(p, TOKEN_STRING);
-		expect(p, TOKEN_SEMICOLON);
 
 		Node *n = alloc_node(p);
 		n->kind = NODE_IMPORT;
@@ -954,6 +1003,16 @@ Node* parse_import(Parser *p) {
 		fullpath.str[current_file.len + import_file.len + 1] = 0;
 
 		n->import.name = fullpath;
+		n->import.as = (String){0};
+		if (match_token(p, TOKEN_AS)) {
+			Token as = p->current_token;
+			if (!match_token(p, TOKEN_IDENT)) {
+				parser_error(p, "Expected identifier after 'as' in import statement!");
+			}
+			n->import.as = as.lexeme;
+		}
+		expect(p, TOKEN_SEMICOLON);
+
 		return n;
 	}
 	else {

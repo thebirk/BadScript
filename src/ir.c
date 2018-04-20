@@ -883,14 +883,14 @@ void ir_use_library(Ir *ir, String name) {
 	}
 }
 
-void ir_import_file(Ir *ir, String path);
+void ir_import_file(Ir *ir, String path, String as);
 void convert_top_levels_to_ir(Ir *ir, Scope *scope, NodeArray stmts) {
 	Node *n;
 	for_array(stmts, n) {
 		ir->loc = n->loc;
 		switch (n->kind) {
 		case NODE_IMPORT: {
-			ir_import_file(ir, n->import.name);
+			ir_import_file(ir, n->import.name, n->import.as);
 		} break;
 		case NODE_USE: {
 			ir_use_library(ir, n->use.name);
@@ -919,12 +919,13 @@ void convert_top_levels_to_ir(Ir *ir, Scope *scope, NodeArray stmts) {
 	}
 }
 
-void ir_import_file(Ir *ir, String path) {
+void ir_import_file(Ir *ir, String path, String as) {
 	Parser p;
 	memset(&p, 0, sizeof(Parser));
 	init_parser(&p, path);
 	NodeArray stmts = parse(&p);
 
+	assert(as.str == 0 && as.len == 0); //TODO: Implement namespace
 	//TODO: Handle recursive imports
 	//TODO: Give every file its own scope, that way, another file cant access our variables etc.
 	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
@@ -1513,6 +1514,14 @@ Value* expr_to_value(Ir *ir, Node *n) {
 				array_add(v->method_call.args, expr_to_value(ir, arg));
 			}
 		}
+		return v;
+	} break;
+	case NODE_ANON_FUNC: {
+		Value *v = alloc_value(ir);
+		v->kind = VALUE_FUNCTION;
+		v->func.kind = FUNCTION_NORMAL;
+		v->func.normal.arg_names = n->anon_func.args;
+		v->func.normal.stmts = convert_nodes_to_stmts(ir, n->anon_func.block->block.stmts);
 		return v;
 	} break;
 	default: {
