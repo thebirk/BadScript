@@ -151,6 +151,67 @@ Value* gfx_fill_rect(Ir *ir, ValueArray args) {
 	return null_value;
 }
 
+Value* gfx_create_texture(Ir *ir, ValueArray args) {
+	if (!state.inited) {
+		ir_error(ir, "gfx.init has to be called before any other gfx function!");
+	}
+	if (args.size != 1) {
+		ir_error(ir, "gfx.create_texture takes one arguments: path");
+	}
+	if (!isstring(args.data[0])) {
+		ir_error(ir, "gfx.create_texture takes one arguments: path");
+	}
+
+	SDL_Surface *image_surface = SDL_LoadBMP(args.data[0]->string.str.str);
+	if (!image_surface) {
+		printf("Failed to load surface\n");
+		return null_value;
+	}
+	SDL_Texture *texture = SDL_CreateTextureFromSurface(state.renderer, image_surface);
+	if (!texture) {
+		SDL_FreeSurface(image_surface);
+		return null_value;
+	}
+	SDL_FreeSurface(image_surface);
+
+	Value *t = alloc_value(ir);
+	t->kind = VALUE_TABLE;
+
+	table_put_name(ir, t, make_string_slow("width"), make_number_value(ir, image_surface->w));
+	table_put_name(ir, t, make_string_slow("height"), make_number_value(ir, image_surface->h));
+
+	Value *data = alloc_value(ir);
+	data->kind = VALUE_USERDATA;
+	data->userdata.data = texture;
+	table_put_name(ir, t, make_string_slow("data"), data);
+
+	return t;
+}
+
+Value* gfx_draw_texture(Ir *ir, ValueArray args) {
+	if (!state.inited) {
+		ir_error(ir, "gfx.init has to be called before any other gfx function!");
+	}
+	//TODO: Handle width,height args
+	if (args.size != 3) {
+		ir_error(ir, "gfx.draw_texture takes one arguments: texture, x, y");
+	}
+	Value *tex = args.data[0];
+	Value *x = args.data[1];
+	Value *y = args.data[2];
+
+	if (!istable(tex) || !isnumber(x) || !isnumber(y)) {
+		ir_error(ir, "gfx.draw_texture takes one arguments: texture, x, y");
+	}
+
+	Value *data = table_get_name(ir, tex, string("data"));
+	int w, h;
+	SDL_QueryTexture(data->userdata.data, 0, 0, &w, &h);
+	SDL_RenderCopy(state.renderer, data->userdata.data, 0, &(SDL_Rect){.x = x->number.value, .y = y->number.value, .w = w, .h = h});
+
+	return null_value;
+}
+
 void import_gfx(Ir *ir) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_TABLE;
@@ -161,6 +222,8 @@ void import_gfx(Ir *ir) {
 	table_put_name(ir, v, make_string_slow("clear"), make_native_function(ir, gfx_clear));
 	table_put_name(ir, v, make_string_slow("present"), make_native_function(ir, gfx_present));
 	table_put_name(ir, v, make_string_slow("fill_rect"), make_native_function(ir, gfx_fill_rect));
+	table_put_name(ir, v, make_string_slow("create_texture"), make_native_function(ir, gfx_create_texture));
+	table_put_name(ir, v, make_string_slow("draw_texture"), make_native_function(ir, gfx_draw_texture));
 
 	scope_add(ir, ir->global_scope, make_string_slow("gfx"), v);
 }

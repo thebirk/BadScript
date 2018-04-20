@@ -11,6 +11,13 @@ func main(args) {
 		return;
 	}
 	
+	var smile = gfx.create_texture("tests/res/smile.bmp");
+	if type(smile) == "null" {
+		println("Failed to load smile.bmp!");
+		return;
+	}
+	println("smile.width: ", smile.width, ", smile.height: ", smile.height);
+	
 	var running = 1;
 	
 	var x = 0;
@@ -19,7 +26,7 @@ func main(args) {
 	while running {
 		gfx.clear();
 		
-		gfx.fill_rect(x, y, 50, 50, 255, 127, 0);
+		gfx.draw_texture(smile, x, y);
 		x = x + 0.01;
 		y = y + 0.01;
 		

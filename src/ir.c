@@ -61,6 +61,7 @@ typedef enum ValueKind {
 	VALUE_CALL,
 	VALUE_METHOD_CALL,
 	VALUE_FIELD,
+	VALUE_USERDATA,
 } ValueKind;
 
 #define isnull(_v)     ((_v)->kind == VALUE_NULL)
@@ -74,6 +75,7 @@ typedef enum ValueKind {
 #define isindex(_v)    ((_v)->kind == VALUE_INDEX)
 #define iscall(_v)     ((_v)->kind == VALUE_CALL)
 #define isfield(_v)    ((_v)->kind == VALUE_FIELD)
+#define isuserdata(_v) ((_v)->kind == VALUE_USERDATA)
 
 // lowest level of expr: null,number,string,table
 #define isbasic(_v) (isnull(_v) || isnumber(_v) || isstring(_v) || istable(_v))
@@ -129,6 +131,9 @@ struct Value {
 			String name;
 			ValueArray args;
 		} method_call;
+		struct {
+			void *data;
+		} userdata;
 	};
 };
 Value *null_value = &(Value) { .kind = VALUE_NULL };

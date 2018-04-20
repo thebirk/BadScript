@@ -1,0 +1,31 @@
+//loop over entities {
+//	e:update(dt);
+//	e:draw(dt);
+//}
+// Ting dette mangler:
+// - Better import support
+// - Bedre array lengder(ikke nødvendig men hadde vært greit)
+// Kan det løses med?:
+/*
+import "entity.bs";
+import "player.bs"; // player.bs referere til funksjoner i entity.bs
+*/
+
+/*
+var entity = {
+	x = x,
+	y = y,
+	w = w,
+	h = h,
+	
+	update = entity_update,
+	draw = entity_draw,
+};
+
+func make_player() {
+	var player = make_entity();
+	player.update = player_update;
+	player.draw = player_draw;
+	player.health = 3;
+	return player;
+}*/
