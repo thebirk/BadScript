@@ -234,7 +234,7 @@ Node* make_binary(Parser *p, Token op, Node *lhs, Node *rhs) {
 }
 
 Node* make_unary(Parser *p, Token op, Node *rhs) {
-	assert(op.kind == TOKEN_PLUS || op.kind == TOKEN_MINUS);
+	assert(op.kind == TOKEN_PLUS || op.kind == TOKEN_MINUS || op.kind == TOKEN_NOT);
 	assert(rhs);
 	Node *n = alloc_node(p);
 
@@ -679,7 +679,7 @@ Node* expr_base(Parser *p) {
 Node* expr_unary(Parser *p) {
 	bool is_unary = false;
 	Token op = p->current_token;
-	if (is_token(p, TOKEN_PLUS) || is_token(p, TOKEN_MINUS)) {
+	if (is_token(p, TOKEN_PLUS) || is_token(p, TOKEN_MINUS) || is_token(p, TOKEN_NOT)) {
 		is_unary = true;
 		next_token(p);
 	}

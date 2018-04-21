@@ -2,20 +2,15 @@ use "gfx";
 import "vec2.bs";
 
 func main(args) {
-	if gfx.init() == false {
+	if !gfx.init() {
 		println("Failed to init gfx!");
 		return;
 	}
 	
-	if gfx.create_window("Hello BS!", 800, 600, 0) == false {
+	if !gfx.create_window("Hello BS!", 800, 600, 0) {
 		println("Failed to create gfx window!");
 		return;
 	}
-	
-	var test = func() {
-		println("Hello");
-	};
-	test();
 	
 	var smile = gfx.create_texture("tests/res/smile.bmp");
 	if type(smile) == type(null) {
@@ -27,7 +22,7 @@ func main(args) {
 	var pos = vec2(0, 0);
 	var speed = 0.1;
 	
-	while gfx.should_close() == false {
+	while !gfx.should_close() {
 		gfx.clear();
 		
 		gfx.draw_texture(smile, pos.x, pos.y);

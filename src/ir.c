@@ -496,6 +496,9 @@ void gc_mark_stmt(Stmt *stmt) {
 			}
 		}
 	} break;
+	default: {
+		assert(!"How did we get here?");
+	} break;
 	}
 }
 
@@ -639,6 +642,7 @@ void gc_sweep(Ir *ir) {
 					array_free(unreached->table_constant.entries);
 				} break;
 				case VALUE_FUNCTION: {
+					free(unreached->func.name.str);
 					switch (unreached->func.kind) {
 					case FUNCTION_NORMAL: {
 						if (unreached->func.normal.arg_names.size > 0) {
@@ -646,9 +650,9 @@ void gc_sweep(Ir *ir) {
 							for_array_ref(unreached->func.normal.arg_names, str) {
 								free(str->str);
 							}
+							array_free(unreached->func.normal.arg_names);
 						}
 						array_free(unreached->func.normal.stmts);
-						array_free(unreached->func.normal.arg_names);
 					} break;
 					}
 				} break;
@@ -1172,6 +1176,9 @@ Value* eval_unary(Ir *ir, Scope *scope, TokenKind op, Value *v) {
 	case TOKEN_MINUS: {
 		res->number.value = -rhs->number.value;
 	} break;
+	case TOKEN_NOT: {
+		res->number.value = !rhs->number.value;
+	} break;
 	default: {
 		assert(!"Invalid unary op");
 		exit(1);
@@ -1446,8 +1453,7 @@ Value* expr_to_value(Ir *ir, Node *n) {
 	case NODE_STRING: {
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_STRING;
-		//TODO: Should we copy this?
-		v->string.str = n->string.string;
+		v->string.str = make_string_copy(n->string.string);
 		return v;
 	} break;
 	case NODE_NAME: {
@@ -1520,7 +1526,15 @@ Value* expr_to_value(Ir *ir, Node *n) {
 		Value *v = alloc_value(ir);
 		v->kind = VALUE_FUNCTION;
 		v->func.kind = FUNCTION_NORMAL;
-		v->func.normal.arg_names = n->anon_func.args;
+		v->func.name = make_string_slow("<anonymous func>");
+		v->func.loc = n->loc;
+
+		if (n->anon_func.args.size > 0) {
+			String *str;
+			for_array_ref(n->anon_func.args, str) {
+				array_add(v->func.normal.arg_names, make_string_slow_len(str->str, str->len));
+			}
+		}
 		v->func.normal.stmts = convert_nodes_to_stmts(ir, n->anon_func.block->block.stmts);
 		return v;
 	} break;

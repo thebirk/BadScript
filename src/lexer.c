@@ -44,6 +44,7 @@ typedef enum TokenKind {
 	TOKEN_TRUE,
 	TOKEN_FALSE,
 	TOKEN_AS,
+	TOKEN_NOT,
 	TOKEN_EOF,
 
 	LAST_TOKEN_KIND,
@@ -96,6 +97,7 @@ char* token_kind_to_string(TokenKind kind) {
 		case TOKEN_TRUE:         return "true";
 		case TOKEN_FALSE:        return "false";
 		case TOKEN_AS:           return "as";
+		case TOKEN_NOT:          return "!";
 		case TOKEN_EOF:          return "(end of file)";
 
 		default: return "(unimplemented TokenKind name)";
@@ -337,6 +339,8 @@ void lex(Lexer *lexer) {
 			
 			BASIC_TOKEN('<', TOKEN_LT);
 			BASIC_TOKEN('>', TOKEN_GT);
+
+			BASIC_TOKEN('!', TOKEN_NOT);
 
 			BASIC_TOKEN('.', TOKEN_DOT);
 			BASIC_TOKEN(',', TOKEN_COMMA);

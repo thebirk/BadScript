@@ -1,4 +1,44 @@
-// vec2 : {x, y}
+/*
+func vec2(x, y) {
+	return {
+		x = x,
+		y = y,
+		
+		set = func(self, x, y) {
+			self.x = x;
+			self.y = y;
+		},
+		
+		add = func(a, b) {
+			return vec2(a.x+b.x, a.y+b.y);
+		},
+		
+		sub = func(a, b) {
+			return vec2(a.x-b.x, a.y-b.y);
+		},
+
+		mul = func(a, b) {
+			return vec2(a.x * b, a.y * b);
+		},
+
+		length = func(v) {
+			return sqrt(v.x*v.x + v.y*v.y);
+		},
+
+		normalized = func(v) {
+			var len = v:length();
+			if len == 0 { return vec2(0, 0); }
+			return vec2(v.x/len, v.y/len);
+		},
+
+		tostring = func(v) {
+			return format("vec2{x = ", v.x, ", y = ", v.y, "}");
+		},
+	};
+}
+*/
+
+
 func vec2(x, y) {
 	var v = {x = x, y = y};
 	
@@ -10,6 +50,11 @@ func vec2(x, y) {
 	v.mul = vec2_mul;
 	
 	return v;
+}
+
+func vec2_set(self, x, y) {
+	self.x = x;
+	self.y = y;
 }
 
 func vec2_add(a, b) {
