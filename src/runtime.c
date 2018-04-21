@@ -89,7 +89,7 @@ void print_value(Value *v) {
 		printf("%.*s", (int)v->string.str.len, v->string.str.str);
 	}
 	else if (v->kind == VALUE_NUMBER) {
-		printf("%f", v->number.value);
+		printf("%g", v->number.value);
 	}
 	else if (v->kind == VALUE_NULL) {
 		printf("(null)");
@@ -229,6 +229,11 @@ Value* runtime_sqrt(Ir* ir, ValueArray args) {
 	return make_number_value(ir, sqrt(n->number.value));
 }
 
+Value* runtime_hack_force_gc(Ir *ir, ValueArray args) {
+	force_gc(ir);
+	return null_value;
+}
+
 void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("print"), make_native_function(ir, runtime_print));
 	scope_add(ir, ir->global_scope, string("println"), make_native_function(ir, runtime_println));
@@ -242,4 +247,7 @@ void add_globals(Ir *ir) {
 	scope_add(ir, ir->global_scope, string("len"), make_native_function(ir, runtime_table_len));
 	scope_add(ir, ir->global_scope, string("pow"), make_native_function(ir, runtime_pow));
 	scope_add(ir, ir->global_scope, string("sqrt"), make_native_function(ir, runtime_sqrt));
+
+	//HACKS!!:
+	scope_add(ir, ir->global_scope, string("__XX_force_gc"), make_native_function(ir, runtime_hack_force_gc));
 }

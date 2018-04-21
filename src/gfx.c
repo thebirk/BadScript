@@ -37,13 +37,16 @@ Value* gfx_create_window(Ir *ir, ValueArray args) {
 		ir_error(ir, "gfx.create_window takes 4 arguements: title, width, height, vsync");
 	}
 
-	//TODO: VSYNC flag
 	state.window = SDL_CreateWindow(title->string.str.str, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width->number.value, height->number.value, 0);
 	if (!state.window) {
 		return make_number_value(ir, 0);
 	}
 
-	state.renderer = SDL_CreateRenderer(state.window, -1, SDL_RENDERER_ACCELERATED);
+	uint32_t renderer_flags = SDL_RENDERER_ACCELERATED;
+	if (vsync->number.value) {
+		renderer_flags |= SDL_RENDERER_PRESENTVSYNC;
+	}
+	state.renderer = SDL_CreateRenderer(state.window, -1, renderer_flags);
 	if (!state.renderer) {
 		return make_number_value(ir, 0);
 	}

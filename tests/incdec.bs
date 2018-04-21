@@ -1,21 +1,25 @@
-func main(args) {
+func many_allocs() {
 	var i = 0;
-	var l = 5;
+	var l = 100000;
 	var arr = {};
 	while i < l {
 		arr[i++] = i;
-		/* 
-		STMT_ASSIGN
-		  - left
-		    - 
-		  
-		*/
-		//i++;
 	}
 	
-	i = 0;
-	while i < l {
+	i = len(arr)-1;
+	while i >= 0 {
 		println(arr[i]);
-		i++;
+		var v = arr[i];
+		i--;
+	}
+}
+
+func main(args) {
+	many_allocs();
+	println("Done");
+	while true {
+		// What is it that we are not freeing?
+		input("Force GC?");
+		__XX_force_gc();
 	}
 }

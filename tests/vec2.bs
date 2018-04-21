@@ -38,7 +38,6 @@ func vec2(x, y) {
 }
 */
 
-
 func vec2(x, y) {
 	var v = {x = x, y = y};
 	

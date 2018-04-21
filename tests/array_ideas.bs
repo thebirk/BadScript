@@ -1,0 +1,17 @@
+func main(args) {
+	var arr = {};
+	var i = 0;
+	while i < 10 {
+		arr[i] = i+1;
+		i = i + 1;
+	}
+	
+	//arr:insert(arr:len()/2, "the middle?");
+	//insert(arr, len(arr)/2, "about the middle?");
+	
+	i = 0;
+	while i < len(arr) {
+		println(arr[i]);
+		i = i + 1;
+	}
+}

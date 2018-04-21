@@ -186,7 +186,7 @@ void check_strings_for_backslashes(String path) {
 	}
 
 	if (did_convert) {
-		printf("lexer: Converted backslahes to slashes!\n\n");
+		printf("lexer: Converted backslashes to slashes!\n\n");
 	}
 }
 
@@ -370,7 +370,7 @@ void lex(Lexer *lexer) {
 #undef BASIC_TOKEN
 		}
 
-		if (is_alpha(*ptr)) {
+		if (is_alpha(*ptr) || *ptr == '_') {
 			char *start = ptr;
 			while (*ptr && is_alnum(*ptr)) {
 				ptr++;

@@ -1,0 +1,5 @@
+func make_world() {
+	return {
+		entities = {},
+	};
+}

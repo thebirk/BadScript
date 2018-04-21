@@ -217,7 +217,6 @@ typedef struct StackCall {
 } StackCall;
 typedef Array(StackCall) CallStack;
 
-typedef Array(Value) ValueMemory;
 typedef Array(Scope*) ScopeStack;
 struct Ir {
 	SourceLoc loc;
@@ -735,10 +734,7 @@ void gc_sweep(Ir *ir) {
 	}
 }
 
-void do_gc(Ir *ir) {
-	if (ir->allocated_values < ir->max_allocated_values) return;
-	if (!ir->do_gc) return;
-
+void do_actual_gc(Ir *ir) {
 	//TODO: Split between couting values,scopes and stmts
 	//TODO: Add pool allocators for values,scopes and stms and have the gc reuse freed pools.
 	int values_before_gc = ir->allocated_values;
@@ -747,8 +743,19 @@ void do_gc(Ir *ir) {
 	gc_sweep(ir);
 
 	ir->max_allocated_values = ir->allocated_values * 2;
-//	printf("Values before gc: %d\n", values_before_gc);
-//	printf("Values after  gc: %d\n", ir->allocated_values);
+	//	printf("Values before gc: %d\n", values_before_gc);
+	//	printf("Values after  gc: %d\n", ir->allocated_values);
+}
+
+void do_gc(Ir *ir) {
+	if (ir->allocated_values < ir->max_allocated_values) return;
+	if (!ir->do_gc) return;
+
+	do_actual_gc(ir);
+}
+
+void force_gc(Ir *ir) {
+	do_actual_gc(ir);
 }
 
 Value* make_string_value(Ir *ir, String str) {
@@ -1065,6 +1072,9 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 
 		//TODO: Give error if value from table is null
 		Value *func = table_get_name(ir, table, stmt->method_call.name);
+		if (!func) {
+			ir_error(ir, "Table does not contain any value called: %.*s", (int)stmt->method_call.name.len, stmt->method_call.name.str);
+		}
 		if (!isfunction(func)) {
 			ir_error(ir, "Right hand side of ':' operator is not a function");
 		}
