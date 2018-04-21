@@ -1,8 +1,21 @@
 func main(args) {
 	var i = 0;
+	var l = 5;
 	var arr = {};
-	while i < 100000000 {
-		println(i);
+	while i < l {
+		arr[i++] = i;
+		/* 
+		STMT_ASSIGN
+		  - left
+		    - 
+		  
+		*/
+		//i++;
+	}
+	
+	i = 0;
+	while i < l {
+		println(arr[i]);
 		i++;
 	}
 }

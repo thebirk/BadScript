@@ -999,19 +999,22 @@ void do_assign(Ir *ir, Scope *scope, Value *lhs, Value *rhs) {
 		ir_error(ir, "Cannot assign to left hand");
 	}
 
-	rhs = eval_value(ir, scope, rhs);
+	
 
 	switch (lhs->kind) {
 	case VALUE_NAME: {
+		rhs = eval_value(ir, scope, rhs);
 		scope_set(ir, scope, lhs->name.name, rhs);
 	} break;
 	case VALUE_FIELD: {
 		Value *expr = eval_value(ir, scope, lhs->field.expr);
+		rhs = eval_value(ir, scope, rhs);
 		table_put_name(ir, expr, lhs->field.name, rhs);
 	} break;
 	case VALUE_INDEX: {
 		Value *expr = eval_value(ir, scope, lhs->index.expr);
 		Value *index = eval_value(ir, scope, lhs->index.index);
+		rhs = eval_value(ir, scope, rhs);
 		table_put(ir, expr, index, rhs);
 	} break;
 	default: {
