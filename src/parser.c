@@ -24,6 +24,7 @@ typedef enum NodeKind {
 	NODE_IMPORT,
 	NODE_USE,
 	NODE_ANON_FUNC,
+	NODE_INCDEC,
 } NodeKind;
 
 typedef enum TableEntryKind {
@@ -135,6 +136,11 @@ struct Node {
 		struct {
 			String name;
 		} use;
+		struct {
+			TokenKind op;
+			bool post;
+			Node *expr;
+		} incdec;
 	};
 };
 
@@ -438,6 +444,20 @@ Node* make_table(Parser *p, Token t, TableEntryArray entries) {
 	return n;
 }
 
+Node* make_incdec(Parser *p, Token op, Node *expr, bool post) {
+	Node *n = alloc_node(p);
+
+	n->loc = op.loc;
+	n->kind = NODE_INCDEC;
+
+	n->incdec.op = op.kind;
+	n->incdec.post = post;
+	n->incdec.expr = expr;
+
+	return n;
+}
+
+
 #ifdef _WIN32
 __declspec(noreturn)
 #else
@@ -662,11 +682,10 @@ Node* expr_base(Parser *p) {
 			}
 		}
 		else if (match_token(p, TOKEN_INCREMENT)) {
-			int x = 0;
-			x++;
+			expr = make_incdec(p, op, expr, true);
 		}
 		else if (match_token(p, TOKEN_DECREMENT)) {
-
+			expr = make_incdec(p, op, expr, true);
 		}
 		else {
 			assert(!"Unsynced while cond and ifs");
@@ -679,14 +698,19 @@ Node* expr_base(Parser *p) {
 Node* expr_unary(Parser *p) {
 	bool is_unary = false;
 	Token op = p->current_token;
-	if (is_token(p, TOKEN_PLUS) || is_token(p, TOKEN_MINUS) || is_token(p, TOKEN_NOT)) {
+	if (is_token(p, TOKEN_PLUS) || is_token(p, TOKEN_MINUS) || is_token(p, TOKEN_NOT) || is_token(p, TOKEN_INCREMENT) || is_token(p, TOKEN_DECREMENT)) {
 		is_unary = true;
 		next_token(p);
 	}
 	Node *rhs = expr_base(p);
 
 	if (is_unary) {
-		rhs = make_unary(p, op, rhs);
+		if (op.kind == TOKEN_INCREMENT || op.kind == TOKEN_DECREMENT) {
+			rhs = make_incdec(p, op, rhs, false);
+		}
+		else {
+			rhs = make_unary(p, op, rhs);
+		}
 	}
 
 	return rhs;
@@ -887,6 +911,10 @@ Node* parse_block(Parser *p) {
 				}
 				else {
 					if (expr->kind == NODE_CALL || expr->kind == NODE_METHOD_CALL) {
+						expect(p, TOKEN_SEMICOLON);
+						stmt = expr;
+					}
+					else if (expr->kind == NODE_INCDEC) {
 						expect(p, TOKEN_SEMICOLON);
 						stmt = expr;
 					}

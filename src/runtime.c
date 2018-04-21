@@ -84,19 +84,26 @@ Value* runtime_println(Ir *ir, ValueArray args) {
 	return null_value;
 }
 
+void print_value(Value *v) {
+	if (v->kind == VALUE_STRING) {
+		printf("%.*s", (int)v->string.str.len, v->string.str.str);
+	}
+	else if (v->kind == VALUE_NUMBER) {
+		printf("%f", v->number.value);
+	}
+	else if (v->kind == VALUE_NULL) {
+		printf("(null)");
+	}
+	else if (v->kind == VALUE_TABLE) {
+		printf("{}");
+	}
+}
+
 Value* runtime_print(Ir *ir, ValueArray args) {
 	if (args.size > 0) {
 		Value *v;
 		for_array(args, v) {
-			if (v->kind == VALUE_STRING) {
-				printf("%.*s", (int)v->string.str.len, v->string.str.str);
-			}
-			else if (v->kind == VALUE_NUMBER) {
-				printf("%f", v->number.value);
-			}
-			else if (v->kind == VALUE_NULL) {
-				printf("(null)");
-			}
+			print_value(v);
 		}
 	}
 

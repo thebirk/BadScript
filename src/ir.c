@@ -61,6 +61,7 @@ typedef enum ValueKind {
 	VALUE_METHOD_CALL,
 	VALUE_FIELD,
 	VALUE_USERDATA,
+	VALUE_INCDEC,
 } ValueKind;
 
 #define isnull(_v)     ((_v)->kind == VALUE_NULL)
@@ -133,6 +134,11 @@ struct Value {
 		struct {
 			void *data;
 		} userdata;
+		struct {
+			Value *expr;
+			TokenKind op;
+			bool post;
+		} incdec;
 	};
 };
 Value *null_value = &(Value) { .kind = VALUE_NULL };
@@ -148,6 +154,7 @@ typedef enum StmtKind {
 	STMT_IF,
 	STMT_WHILE,
 	STMT_BLOCK,
+	STMT_INCDEC,
 } StmtKind;
 
 struct Stmt {
@@ -196,6 +203,10 @@ struct Stmt {
 		struct {
 			StmtArray stmts;
 		} block;
+		struct {
+			Value *expr;
+			TokenKind op;
+		} incdec;
 	};
 };
 
@@ -496,6 +507,9 @@ void gc_mark_stmt(Stmt *stmt) {
 			}
 		}
 	} break;
+	case STMT_INCDEC: {
+		gc_mark(stmt->incdec.expr);
+	} break;
 	default: {
 		assert(!"How did we get here?");
 	} break;
@@ -580,6 +594,9 @@ void gc_mark(Value *v) {
 				gc_mark((Value*)e->val);
 			}
 		}
+	} break;
+	case VALUE_INCDEC: {
+		gc_mark(v->incdec.expr);
 	} break;
 	}
 }
@@ -857,6 +874,27 @@ Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
 		stmt->_while.block = convert_node_to_stmt(ir, n->_while.block);
 		return stmt;
 	} break;
+	case NODE_INCDEC: {
+		Stmt *stmt = alloc_stmt(ir, n->loc);
+		stmt->kind = STMT_ASSIGN;
+		stmt->assign.left = expr_to_value(ir, n->incdec.expr);
+
+		Value *binop = alloc_value(ir);
+		binop->kind = VALUE_BINOP;
+		if (n->incdec.op == TOKEN_INCREMENT) {
+			binop->binary.op = TOKEN_PLUS;
+		} else if (n->incdec.op == TOKEN_DECREMENT) {
+			binop->binary.op = TOKEN_MINUS;
+		}
+		else {
+			assert(!"Invalid incdec op");
+		}
+		binop->binary.lhs = expr_to_value(ir, n->incdec.expr);
+		binop->binary.rhs = make_number_value(ir, 1);
+		stmt->assign.right = binop;
+
+		return stmt;
+	} break;
 	default: {
 		assert(!"Unhandled node to stmt case!");
 		exit(1);
@@ -952,6 +990,36 @@ void init_ir(Ir *ir, NodeArray stmts) {
 	ir->do_gc = true;
 }
 
+void do_assign(Ir *ir, Scope *scope, Value *lhs, Value *rhs) {
+	if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
+		// Error not supported assignemtn or something else?
+		lhs = eval_value(ir, scope, lhs);
+	}
+	if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
+		ir_error(ir, "Cannot assign to left hand");
+	}
+
+	rhs = eval_value(ir, scope, rhs);
+
+	switch (lhs->kind) {
+	case VALUE_NAME: {
+		scope_set(ir, scope, lhs->name.name, rhs);
+	} break;
+	case VALUE_FIELD: {
+		Value *expr = eval_value(ir, scope, lhs->field.expr);
+		table_put_name(ir, expr, lhs->field.name, rhs);
+	} break;
+	case VALUE_INDEX: {
+		Value *expr = eval_value(ir, scope, lhs->index.expr);
+		Value *index = eval_value(ir, scope, lhs->index.index);
+		table_put(ir, expr, index, rhs);
+	} break;
+	default: {
+		ir_error(ir, "Cannot assign to left hand");
+	} break;
+	}
+}
+
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	ir->loc = stmt->loc;
@@ -968,34 +1036,7 @@ bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 		return true;
 	} break;
 	case STMT_ASSIGN: {
-		Value *lhs = stmt->assign.left;
-		if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
-			// Error not supported assignemtn or something else?
-			lhs = eval_value(ir, scope, stmt->assign.left);
-		}
-		if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
-			ir_error(ir, "Cannot assign to left hand");
-		}
-
-		Value *rhs = eval_value(ir, scope, stmt->assign.right);
-
-		switch (lhs->kind) {
-		case VALUE_NAME: {
-			scope_set(ir, scope, lhs->name.name, rhs);
-		} break;
-		case VALUE_FIELD: {
-			Value *expr = eval_value(ir, scope, lhs->field.expr);
-			table_put_name(ir, expr, lhs->field.name, rhs);
-		} break;
-		case VALUE_INDEX: {
-			Value *expr = eval_value(ir, scope, lhs->index.expr);
-			Value *index = eval_value(ir, scope, lhs->index.index);
-			table_put(ir, expr, index, rhs);
-		} break;
-		default: {
-			ir_error(ir, "Cannot assign to left hand");
-		} break;
-		}
+		do_assign(ir, scope, stmt->assign.left, stmt->assign.right);
 	} break;
 	case STMT_CALL: {
 		Value *func = eval_value(ir, scope, stmt->call.expr);
@@ -1228,6 +1269,9 @@ Value* eval_binop(Ir *ir, Scope *scope, TokenKind op, Value *lhs, Value *rhs) {
 			// If lhs is a string we concat multiple strings and conver the rhs if its a number
 			ir_error(ir, "String concatination is not yet implemented!");
 		}
+		else {
+			ir_error(ir, "Operator '%s' only work with numbers and strings.", token_kind_to_string(op));
+		}
 	} break;
 
 	case TOKEN_MINUS:
@@ -1433,6 +1477,40 @@ Value* eval_value(Ir *ir, Scope *scope, Value *v) {
 			return null_value;
 		}
 	} break;
+	case VALUE_INCDEC: {
+		Value *lhs = v->incdec.expr;
+		if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
+			// Error not supported assignemtn or something else?
+			lhs = eval_value(ir, scope, v->incdec.expr);
+		}
+		if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
+			ir_error(ir, "Cannot assign to left hand");
+		}
+
+		Value *lhs_value = eval_value(ir, scope, lhs);
+		Value *to_assign = 0;
+		if (v->incdec.op == TOKEN_INCREMENT) {
+			to_assign = eval_binop(ir, scope, TOKEN_PLUS, lhs_value, make_number_value(ir, 1));
+		}
+		else if (v->incdec.op == TOKEN_INCREMENT) {
+			to_assign = eval_binop(ir, scope, TOKEN_MINUS, lhs_value, make_number_value(ir, 1));
+		}
+		else {
+			assert(!"Invalid incdec op");
+		}
+
+		Value *result = 0;
+		if (v->incdec.post) {
+			result = eval_value(ir, scope, lhs);
+		}
+		else {
+			result = eval_value(ir, scope, to_assign);
+		}
+
+		do_assign(ir, scope, lhs, to_assign);
+
+		return result;
+	} break;
 	default: {
 		return v;
 	} break;
@@ -1536,6 +1614,14 @@ Value* expr_to_value(Ir *ir, Node *n) {
 			}
 		}
 		v->func.normal.stmts = convert_nodes_to_stmts(ir, n->anon_func.block->block.stmts);
+		return v;
+	} break;
+	case NODE_INCDEC: {
+		Value *v = alloc_value(ir);
+		v->kind = VALUE_INCDEC;
+		v->incdec.expr = expr_to_value(ir, n->incdec.expr);
+		v->incdec.op = n->incdec.op;
+		v->incdec.post = n->incdec.post;
 		return v;
 	} break;
 	default: {

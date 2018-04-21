@@ -256,6 +256,18 @@ void lex(Lexer *lexer) {
 			continue;
 		}
 
+		if (*ptr == '\t') {
+			// Tabs are counted as the offset to the next tabstop
+			size_t mod4_offset = lexer->offset % 4;
+			if (mod4_offset > 0) {
+				lexer->offset += mod4_offset;
+			} else {
+				lexer->offset += 4;
+			}
+			ptr++;
+			continue;
+		}
+
 		if (*ptr == '\n') {
 			ptr++;
 			lexer->line++;
