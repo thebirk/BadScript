@@ -186,7 +186,7 @@ void check_strings_for_backslashes(String path) {
 	}
 
 	if (did_convert) {
-		printf("lexer: Converted backslashes to slashes!\n\n");
+		//printf("lexer: Converted backslashes to slashes!\n\n");
 	}
 }
 
