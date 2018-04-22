@@ -227,6 +227,186 @@ void map_free(Map *map) {
 	free(map->entries);
 }
 
+typedef struct Bucket Bucket;
+struct Bucket {
+	void *arena;
+	size_t bucket_size;
+	size_t bucket_used;
+	size_t element_size;
+	size_t count;
+	Bucket *next;
+};
+
+typedef struct Pool {
+	Bucket *current_bucket;
+	Bucket *old_buckets;
+	size_t element_size;
+	size_t bucket_size;
+	size_t buckets;
+} Pool;
+
+Bucket* __pool_make_bucket(Pool *pool) {
+	Bucket *bucket = calloc(1, sizeof(Bucket));
+
+	bucket->element_size = pool->element_size;
+	bucket->bucket_size = pool->bucket_size;
+	bucket->arena = calloc(1, bucket->bucket_size);
+	bucket->bucket_used = 0;
+	bucket->count = 0;
+	bucket->next = 0;
+
+	pool->buckets++;
+
+	return bucket;
+}
+
+void pool_init(Pool *pool, size_t element_size, size_t bucket_size) {
+	pool->buckets = 0;
+	pool->element_size = element_size + sizeof(Bucket*);
+	pool->bucket_size = bucket_size * element_size;
+	pool->old_buckets = 0;
+	pool->current_bucket = __pool_make_bucket(pool);
+}
+
+void* pool_alloc(Pool *pool) {
+	if (pool->current_bucket->bucket_used + pool->current_bucket->element_size > pool->current_bucket->bucket_size) {
+		Bucket *old = pool->current_bucket;
+		old->next = pool->old_buckets;
+		pool->old_buckets = old;
+		pool->current_bucket = __pool_make_bucket(pool);
+	}
+	Bucket **result = (Bucket**)((uint8_t*)(pool->current_bucket->arena) + pool->current_bucket->bucket_used);
+	pool->current_bucket->bucket_used += pool->current_bucket->element_size;
+	*result = pool->current_bucket;
+	pool->current_bucket->count++;
+	result++;
+	memset(result, 0, pool->current_bucket->element_size-sizeof(Bucket*));
+	return result;
+}
+
+void pool_clear_buckets(Pool *pool) {
+	//printf("Total buckets before clear: %d\n", (int)pool->buckets);
+
+	Bucket **bucket = &pool->old_buckets;
+	while (*bucket) {
+		if ((*bucket)->count == 0) {
+			Bucket *old = *bucket;
+			*bucket = old->next;
+
+			free(old->arena);
+			free(old);
+			pool->buckets--;
+		}
+		else {
+			bucket = &(*bucket)->next;
+		}
+	}
+
+	//printf("Total buckets after clear: %d\n", (int)pool->buckets);
+}
+
+void pool_release(Pool *pool, void *ptr) {
+	Bucket **header = ptr;
+	header--;
+	Bucket *owner_bucket = *header;
+	owner_bucket->count--;
+
+
+}
+
+/*void pool_release(Pool *pool, void *ptr) {
+	Bucket **header = ptr;
+	header--;
+	Bucket *owner_bucket = *header;
+	owner_bucket->count--;
+
+	Bucket *bucket = pool->old_buckets;
+	while (bucket) {
+		if (bucket == pool->old_buckets && bucket->count == 0) {
+			free(bucket->arena);
+			Bucket *next = bucket->next;
+			free(bucket);
+			pool->old_buckets = next;
+			bucket = pool->old_buckets;
+		}
+		else if (bucket->count == 0) {
+			free(bucket->arena);
+			Bucket *next = bucket->next;
+			if (bucket->prev) {
+				bucket->prev->next = next;
+			}
+			free(bucket);
+			bucket = next;
+		}
+		else {
+			bucket = bucket->next;
+		}
+	}
+}*/
+
+
+/*
+typedef Array(void*) PointerArray;
+typedef struct Pool {
+	PointerArray data;
+	size_t element_size;
+	void **free_list;
+	size_t free_count;
+} Pool;
+
+void pool_init(Pool *pool, size_t element_size) {
+	pool->element_size = element_size;
+	pool->free_list = 0;
+	pool->free_count = 0;
+}
+
+void pool_free_freelist(Pool *pool) {
+	while (pool->free_list) {
+		void *result = (void*)pool->free_list;
+		void **ptr = (void**)*pool->free_list;
+		pool->free_list = ptr;
+		free(result);
+	}
+	pool->free_count = 0;
+}
+
+void pool_free(Pool *pool) {
+	if (pool->data.size > 0) {
+		void *ptr;
+		for_array(pool->data, ptr) {
+			free(ptr);
+		}
+		array_clear(pool->data);
+	}
+	pool_free_freelist(pool);
+}
+
+void* pool_alloc(Pool *pool) {
+	assert(pool);
+	if (pool->free_list) {
+		void *result = (void*)pool->free_list;
+		void **ptr = (void**)*pool->free_list;
+		pool->free_list = ptr;
+		memset(result, 0, pool->element_size);
+		pool->free_count--;
+		return result;
+	}
+	else {
+		void *result = calloc(1, pool->element_size);
+		//array_add(pool->data, result);
+		return result;
+	}
+}
+
+void pool_release(Pool *pool, void *ptr) {
+	assert(pool);
+	assert(ptr);
+	*(void**)ptr = pool->free_list;
+	pool->free_list = (void**)ptr;
+	pool->free_count++;
+}
+*/
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

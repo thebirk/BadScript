@@ -20,6 +20,7 @@ Value* expr_to_value(Ir *ir, Node *n);
 void add_globals(Ir *ir); // Found in runtime.c
 void do_gc(Ir *ir);
 void gc_mark_scope(Scope *scope);
+void free_stmt(Ir *ir, Stmt *stmt);
 
 #ifdef _WIN32
 __declspec(noreturn)
@@ -225,6 +226,10 @@ struct Ir {
 	CallStack callstack;
 	ScopeStack scope_stack;
 
+	Pool value_pool;
+	Pool scope_pool;
+	Pool stmt_pool;
+
 	// Linked lists of all allocated data
 	Value *first_value;
 	Scope *first_scope;
@@ -274,14 +279,21 @@ struct Scope {
 Scope* alloc_scope(Ir *ir) {
 	//do_gc(ir);
 
-	Scope *scope = calloc(1, sizeof(Scope));
-	memset(scope, 0, sizeof(Scope));
+	//Scope *scope = calloc(1, sizeof(Scope));
+	//memset(scope, 0, sizeof(Scope));
+	Scope *scope = pool_alloc(&ir->scope_pool);
+	
 
 	scope->next = ir->first_scope;
 	ir->first_scope = scope;
 	ir->allocated_values++;
 
 	return scope;
+}
+
+void free_scope(Ir *ir, Scope *scope) {
+	// free(scope);
+	pool_release(&ir->scope_pool, scope);
 }
 
 Scope* make_scope_no_gc(Ir *ir, Scope *parent) {
@@ -441,7 +453,9 @@ Value* table_get_name(Ir *ir, Value *table, String name) {
 Value* alloc_value(Ir *ir) {
 	//do_gc(ir);
 
-	Value *v = calloc(1, sizeof(Value));
+	//Value *v = calloc(1, sizeof(Value));
+	//memset(v, 0, sizeof(Value));
+	Value *v = pool_alloc(&ir->value_pool);
 	ir->allocated_values++;
 
 	v->gc_marked = false;
@@ -449,6 +463,11 @@ Value* alloc_value(Ir *ir) {
 	ir->first_value = v;
 
 	return v;
+}
+
+void free_value(Ir *ir, Value *v) {
+	// free(v);
+	pool_release(&ir->value_pool, v);
 }
 
 void gc_mark(Value *v);
@@ -673,7 +692,7 @@ void gc_sweep(Ir *ir) {
 					}
 				} break;
 				}
-				free(unreached);
+				free_value(ir, unreached);
 				ir->allocated_values--;
 			}
 			else {
@@ -690,7 +709,7 @@ void gc_sweep(Ir *ir) {
 				Scope *unreached = *scope;
 				*scope = unreached->next;
 				map_free(&unreached->symbols);
-				free(unreached);
+				free_scope(ir, unreached);
 				ir->allocated_values--;
 			}
 			else {
@@ -723,7 +742,7 @@ void gc_sweep(Ir *ir) {
 				} break;
 				}
 
-				free(unreached);
+				free_stmt(ir, unreached);
 				ir->allocated_values--;
 			}
 			else {
@@ -732,6 +751,25 @@ void gc_sweep(Ir *ir) {
 			}
 		}
 	}
+
+	/*size_t total_free = ir->value_pool.free_count + ir->scope_pool.free_count + ir->stmt_pool.free_count;
+	if (ir->allocated_values < total_free) {
+		pool_free_freelist(&ir->value_pool);
+		pool_free_freelist(&ir->scope_pool);
+		pool_free_freelist(&ir->stmt_pool);
+	}*/
+	/*if (ir->value_pool.buckets > 4096) {
+		pool_clear_buckets(&ir->value_pool);
+	}
+	if (ir->scope_pool.buckets > 128) {
+		pool_clear_buckets(&ir->scope_pool);
+	}
+	if (ir->stmt_pool.buckets > 128) {
+		pool_clear_buckets(&ir->stmt_pool);
+	}*/
+	pool_clear_buckets(&ir->value_pool);
+	pool_clear_buckets(&ir->scope_pool);
+	pool_clear_buckets(&ir->stmt_pool);
 }
 
 void do_actual_gc(Ir *ir) {
@@ -783,7 +821,9 @@ Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
 Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
 	//do_gc(ir);
 
-	Stmt *stmt = calloc(1, sizeof(Stmt));
+	//Stmt *stmt = calloc(1, sizeof(Stmt));
+	//memset(stmt, 0, sizeof(Stmt));
+	Stmt *stmt = pool_alloc(&ir->stmt_pool);
 
 	stmt->next = ir->first_stmt;
 	ir->first_stmt = stmt;
@@ -791,6 +831,11 @@ Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
 
 	stmt->loc = loc;
 	return stmt;
+}
+
+void free_stmt(Ir *ir, Stmt *stmt) {
+	// free(stmt);
+	pool_release(&ir->stmt_pool, stmt);
 }
 
 Stmt* convert_node_to_stmt(Ir *ir, Node *n) {
@@ -981,8 +1026,12 @@ void ir_import_file(Ir *ir, String path, String as) {
 }
 
 void init_ir(Ir *ir, NodeArray stmts) {
+	pool_init(&ir->value_pool, sizeof(Value), 4096);
+	pool_init(&ir->scope_pool, sizeof(Scope), 128);
+	pool_init(&ir->stmt_pool, sizeof(Stmt), 128);
+	
 	ir->do_gc = false;
-	ir->max_allocated_values = 2;
+	ir->max_allocated_values = 1024;
 	ir->allocated_values = 0;
 	ir->first_value = 0;
 	ir->first_scope = 0;
@@ -993,6 +1042,8 @@ void init_ir(Ir *ir, NodeArray stmts) {
 	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
 
 	add_globals(ir);
+
+	// printf("sizeof(Value): %d\n", (int)sizeof(Value));
 
 	ir->do_gc = true;
 }

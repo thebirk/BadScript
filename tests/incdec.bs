@@ -1,14 +1,14 @@
 func many_allocs() {
 	var i = 0;
-	var l = 100000;
+	var l = 1000000;
 	var arr = {};
 	while i < l {
 		arr[i++] = i;
 	}
 	
-	i = len(arr)-1;
+	i = l-1;
 	while i >= 0 {
-		println(arr[i]);
+		//println(arr[i]);
 		var v = arr[i];
 		i--;
 	}
@@ -16,6 +16,7 @@ func many_allocs() {
 
 func main(args) {
 	many_allocs();
+	return;
 	println("Done");
 	while true {
 		// What is it that we are not freeing?

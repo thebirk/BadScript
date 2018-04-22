@@ -7,7 +7,7 @@ func main(args) {
 		return;
 	}
 	
-	if !gfx.create_window("Hello BS!", 800, 600, 0) {
+	if !gfx.create_window("Hello BS!", 800, 600, false) {
 		println("Failed to create gfx window!");
 		return;
 	}
