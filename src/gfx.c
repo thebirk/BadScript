@@ -241,16 +241,16 @@ void gfx_add_key_names(Ir *ir, Value *t);
 void import_gfx(Ir *ir) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_TABLE;
-	table_put_name(ir, v, make_string_slow("init"), make_native_function(ir, gfx_init));
-	table_put_name(ir, v, make_string_slow("create_window"), make_native_function(ir, gfx_create_window));
-	table_put_name(ir, v, make_string_slow("update"), make_native_function(ir, gfx_update));
-	table_put_name(ir, v, make_string_slow("should_close"), make_native_function(ir, gfx_should_close));
-	table_put_name(ir, v, make_string_slow("clear"), make_native_function(ir, gfx_clear));
-	table_put_name(ir, v, make_string_slow("present"), make_native_function(ir, gfx_present));
-	table_put_name(ir, v, make_string_slow("fill_rect"), make_native_function(ir, gfx_fill_rect));
-	table_put_name(ir, v, make_string_slow("create_texture"), make_native_function(ir, gfx_create_texture));
-	table_put_name(ir, v, make_string_slow("draw_texture"), make_native_function(ir, gfx_draw_texture));
-	table_put_name(ir, v, make_string_slow("get_key_state"), make_native_function(ir, gfx_get_key_state));
+	table_put_name(ir, v, make_string_slow("init"), make_native_function(ir, string("init"), gfx_init));
+	table_put_name(ir, v, make_string_slow("create_window"), make_native_function(ir, string("create_window"), gfx_create_window));
+	table_put_name(ir, v, make_string_slow("update"), make_native_function(ir, string("update"), gfx_update));
+	table_put_name(ir, v, make_string_slow("should_close"), make_native_function(ir, string("should_close"), gfx_should_close));
+	table_put_name(ir, v, make_string_slow("clear"), make_native_function(ir, string("clear"), gfx_clear));
+	table_put_name(ir, v, make_string_slow("present"), make_native_function(ir, string("present"), gfx_present));
+	table_put_name(ir, v, make_string_slow("fill_rect"), make_native_function(ir, string("fill_rect"), gfx_fill_rect));
+	table_put_name(ir, v, make_string_slow("create_texture"), make_native_function(ir, string("create_texture"), gfx_create_texture));
+	table_put_name(ir, v, make_string_slow("draw_texture"), make_native_function(ir, string("draw_texture"), gfx_draw_texture));
+	table_put_name(ir, v, make_string_slow("get_key_state"), make_native_function(ir, string("get_key_state"), gfx_get_key_state));
 
 	gfx_add_key_names(ir, v);
 

@@ -235,19 +235,19 @@ Value* runtime_hack_force_gc(Ir *ir, ValueArray args) {
 }
 
 void add_globals(Ir *ir) {
-	scope_add(ir, ir->global_scope, string("print"), make_native_function(ir, runtime_print));
-	scope_add(ir, ir->global_scope, string("println"), make_native_function(ir, runtime_println));
-	scope_add(ir, ir->global_scope, string("msgbox"), make_native_function(ir, runtime_msgbox));
-	scope_add(ir, ir->global_scope, string("type"), make_native_function(ir, runtime_type));
-	scope_add(ir, ir->global_scope, string("input"), make_native_function(ir, runtime_input));
-	scope_add(ir, ir->global_scope, string("str2num"), make_native_function(ir, runtime_str2num));
-	scope_add(ir, ir->global_scope, string("num2str"), make_native_function(ir, runtime_num2str));
-	scope_add(ir, ir->global_scope, string("input_hidden"), make_native_function(ir, runtime_input_hidden));
-	scope_add(ir, ir->global_scope, string("format"), make_native_function(ir, runtime_format));
-	scope_add(ir, ir->global_scope, string("len"), make_native_function(ir, runtime_table_len));
-	scope_add(ir, ir->global_scope, string("pow"), make_native_function(ir, runtime_pow));
-	scope_add(ir, ir->global_scope, string("sqrt"), make_native_function(ir, runtime_sqrt));
+	scope_add(ir, ir->global_scope, string("print"), make_native_function(ir, string("print"), runtime_print));
+	scope_add(ir, ir->global_scope, string("println"), make_native_function(ir, string("println"), runtime_println));
+	scope_add(ir, ir->global_scope, string("msgbox"), make_native_function(ir, string("msgbox"), runtime_msgbox));
+	scope_add(ir, ir->global_scope, string("type"), make_native_function(ir, string("type"), runtime_type));
+	scope_add(ir, ir->global_scope, string("input"), make_native_function(ir, string("input"), runtime_input));
+	scope_add(ir, ir->global_scope, string("str2num"), make_native_function(ir, string("str2num"), runtime_str2num));
+	scope_add(ir, ir->global_scope, string("num2str"), make_native_function(ir, string("num2str"), runtime_num2str));
+	scope_add(ir, ir->global_scope, string("input_hidden"), make_native_function(ir, string("input_hidden"), runtime_input_hidden));
+	scope_add(ir, ir->global_scope, string("format"), make_native_function(ir, string("format"), runtime_format));
+	scope_add(ir, ir->global_scope, string("len"), make_native_function(ir, string("len"), runtime_table_len));
+	scope_add(ir, ir->global_scope, string("pow"), make_native_function(ir, string("pow"), runtime_pow));
+	scope_add(ir, ir->global_scope, string("sqrt"), make_native_function(ir, string("sqrt"), runtime_sqrt));
 
 	//HACKS!!:
-	scope_add(ir, ir->global_scope, string("__XX_force_gc"), make_native_function(ir, runtime_hack_force_gc));
+	scope_add(ir, ir->global_scope, string("__XX_force_gc"), make_native_function(ir, string("__XX_force_gc"), runtime_hack_force_gc));
 }

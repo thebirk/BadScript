@@ -752,7 +752,7 @@ void gc_sweep(Ir *ir) {
 		}
 	}
 
-	{
+	if (0) {
 		size_t free_buckets = 0;
 		size_t old_buckets = 0;
 		Bucket *b = ir->value_pool.free_buckets;
@@ -822,8 +822,8 @@ void do_actual_gc(Ir *ir) {
 	gc_sweep(ir);
 
 	ir->max_allocated_values = ir->allocated_values * 2;
-	//	printf("Values before gc: %d\n", values_before_gc);
-	//	printf("Values after  gc: %d\n", ir->allocated_values);
+	//printf("Values before gc: %d\n", values_before_gc);
+	//printf("Values after  gc: %d\n", ir->allocated_values);
 }
 
 void do_gc(Ir *ir) {
@@ -851,11 +851,12 @@ Value* make_number_value(Ir *ir, double n) {
 	return v;
 }
 
-Value* make_native_function(Ir *ir, Value* (*func)(Ir *ir, ValueArray args)) {
+Value* make_native_function(Ir *ir, String name, Value* (*func)(Ir *ir, ValueArray args)) {
 	Value *v = alloc_value(ir);
 	v->kind = VALUE_FUNCTION;
 	v->func.kind = FUNCTION_NATIVE;
 	v->func.native.function = func;
+	v->func.name = make_string_copy(name);
 	return v;
 }
 
@@ -1286,15 +1287,14 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args, bool is_method_
 	Value *return_value = null_value;
 
 	Function func = func_value->func;
+	StackCall call = { 0 };
+	call.loc = func.loc;
+	call.kind = func.kind;
+	call.name = make_string_copy(func.name);
+	push_call(ir, call);
 	switch (func.kind) {
 	case FUNCTION_NORMAL: {
-		StackCall call = { 0 };
-		call.loc = func.loc;
-		call.kind = func.kind;
-		call.name = make_string_copy(func.name);
-		push_call(ir, call);
 		return_value = eval_function(ir, func, args, is_method_call);
-		pop_call(ir);
 	} break;
 	case FUNCTION_NATIVE: {
 		assert(func.native.function);
@@ -1305,6 +1305,7 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args, bool is_method_
 	} break;
 	}
 
+	pop_call(ir);
 	return return_value;
 }
 
