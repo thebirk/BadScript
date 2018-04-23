@@ -9,13 +9,12 @@
 #include <math.h>
 #include <assert.h>
 
-#include "common.c"
-#include "timings.c"
-#include "lexer.c"
-#include "parser.c"
-#include "ir.c"
-#include "gfx.c"
-#include "runtime.c"
+#include "common.h"
+#include "timings.h"
+#include "parser.h"
+#include "ir.h"
+#include "gfx.h"
+#include "runtime.h"
 
 void print_usage(char *binary_name) {
 	printf("Usage: %s [options] <script> [script arguments]\n", binary_name);

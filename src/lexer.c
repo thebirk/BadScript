@@ -1,54 +1,4 @@
-typedef enum TokenKind {
-	TOKEN_UNKNOWN = 0,
-	TOKEN_NUMBER,
-	TOKEN_IDENT,
-	TOKEN_NULL,
-	TOKEN_FUNC,
-	TOKEN_RETURN,
-	TOKEN_CONTINUE,
-	TOKEN_BREAK,
-	TOKEN_VAR,
-	TOKEN_IF,
-	TOKEN_ELSE,
-	TOKEN_LEFTPAR,
-	TOKEN_RIGHTPAR,
-	TOKEN_LEFTBRACE,
-	TOKEN_RIGHTBRACE,
-	TOKEN_LEFTBRACKET,
-	TOKEN_RIGHTBRACKET,
-	TOKEN_EQUAL,
-	TOKEN_EQUALS,
-	TOKEN_PLUS,
-	TOKEN_MINUS,
-	TOKEN_SLASH,
-	TOKEN_ASTERISK,
-	TOKEN_MOD,
-	TOKEN_LT,
-	TOKEN_GT,
-	TOKEN_LTE,
-	TOKEN_GTE,
-	TOKEN_NE,
-	TOKEN_COMMA,
-	TOKEN_SEMICOLON,
-	TOKEN_COLON,
-	TOKEN_FOR,
-	TOKEN_WHILE,
-	TOKEN_STRING,
-	TOKEN_LAND,
-	TOKEN_LOR,
-	TOKEN_DOT,
-	TOKEN_IMPORT,
-	TOKEN_USE,
-	TOKEN_INCREMENT,
-	TOKEN_DECREMENT,
-	TOKEN_TRUE,
-	TOKEN_FALSE,
-	TOKEN_AS,
-	TOKEN_NOT,
-	TOKEN_EOF,
-
-	LAST_TOKEN_KIND,
-} TokenKind;
+#include "lexer.h"
 
 char* token_kind_to_string(TokenKind kind) {
 	switch (kind) {
@@ -104,30 +54,7 @@ char* token_kind_to_string(TokenKind kind) {
 	}
 }
 
-typedef struct SourceLoc {
-	String file;
-	size_t line;
-	size_t offset;
-} SourceLoc;
-
-typedef struct Token {
-	TokenKind kind;
-	String lexeme;
-	SourceLoc loc;
-	union {
-		double number_value;
-	};
-} Token;
-
-typedef struct Lexer {
-	String file;
-	char *data;
-	size_t line;
-	size_t offset;
-	Array(Token) tokens;
-	StringArray strings;
-} Lexer;
-
+static
 #ifdef _WIN32
 __declspec(noreturn)
 #else
@@ -150,7 +77,7 @@ void lexer_error(Lexer *lexer, char *format, ...) {
 	exit(1);
 }
 
-void read_entire_file(Lexer *lexer, String path) {
+static void read_entire_file(Lexer *lexer, String path) {
 	FILE *f = fopen(path.str, "rb");
 	if (!f) {
 		lexer_error(lexer, "Failed to open file '%s'!", path.str);
@@ -169,14 +96,14 @@ void read_entire_file(Lexer *lexer, String path) {
 	lexer->data = buffer;
 }
 
-void add_token(Lexer *lexer, Token t) {
+static void add_token(Lexer *lexer, Token t) {
 	t.loc = (SourceLoc) { lexer->file, lexer->line, lexer->offset };
 	t.lexeme = make_string_slow_len(t.lexeme.str, t.lexeme.len);
 	array_add(lexer->strings, t.lexeme);
 	array_add(lexer->tokens, t);
 }
 
-void check_strings_for_backslashes(String path) {
+static void check_strings_for_backslashes(String path) {
 	bool did_convert = false;
 	for (size_t i = 0; i < path.len; i++) {
 		if (path.str[i] == '\\') {
@@ -214,27 +141,27 @@ void init_lexer_from_string(Lexer *lexer, char *str) {
 	array_init(lexer->tokens, 128);
 }
 
-bool is_upper(char c) {
+static bool is_upper(char c) {
 	return (c >= 'A' && c <= 'Z');
 }
 
-bool is_lower(char c) {
+static bool is_lower(char c) {
 	return (c >= 'a' && c <= 'z');
 }
 
-bool is_alpha(char c) {
+static bool is_alpha(char c) {
 	return is_upper(c) || is_lower(c);
 }
 
-bool is_num(char c) {
+static bool is_num(char c) {
 	return (c >= '0') && (c <= '9');
 }
 
-bool is_alnum(char c) {
+static bool is_alnum(char c) {
 	return is_alpha(c) || is_num(c) || c == '_';
 }
 
-bool is_space(char c) {
+static bool is_space(char c) {
 	return (c == ' ' || c == '\t');
 }
 
@@ -449,7 +376,7 @@ void lex(Lexer *lexer) {
 	array_add(lexer->tokens, (Token) { TOKEN_EOF });
 }
 
-void lexer_test() {
+static void lexer_test() {
 	Lexer lexer = { 0 };
 	init_lexer(&lexer, string("test.bd"));
 	lex(&lexer);

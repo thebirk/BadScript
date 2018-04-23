@@ -1,158 +1,6 @@
-typedef enum NodeKind {
-	NODE_UNKNOWN = 0,
-	NODE_NUMBER,
-	NODE_NAME,
-	NODE_STRING,
-	NODE_BINOP,
-	NODE_UNARY,
-	NODE_FIELD,
-	NODE_CALL,
-	NODE_METHOD_CALL,
-	NODE_RETURN,
-	NODE_FUNC,
-	NODE_VAR,
-	NODE_CONTINUE,
-	NODE_BREAK,
-	NODE_FOR,
-	NODE_WHILE,
-	NODE_IF,
-	NODE_INDEX,
-	NODE_ASSIGN,
-	NODE_BLOCK,
-	NODE_TABLE,
-	NODE_NULL,
-	NODE_IMPORT,
-	NODE_USE,
-	NODE_ANON_FUNC,
-	NODE_INCDEC,
-} NodeKind;
+#include "parser.h"
 
-typedef enum TableEntryKind {
-	ENTRY_NORMAL, // { expr, expr, expr }
-	ENTRY_KEY,    // { expr = expr, expr = expr }
-	ENTRY_INDEX,  // { [expr] = expr, [expr] = expr}
-} TableEntryKind;
-
-typedef struct Node Node;
-typedef struct TableEntry {
-	TableEntryKind kind;
-	Node *expr;
-	union {
-		Node *key;
-		Node *index;
-	};
-} TableEntry;
-typedef Array(TableEntry) TableEntryArray;
-
-typedef struct Node Node;
-typedef Array(Node*)  NodeArray;
-struct Node {
-	NodeKind kind;
-	SourceLoc loc;
-	union {
-		struct {
-			double value;
-		} number;
-		struct {
-			String name;
-		} name;
-		struct {
-			String string;
-		} string;
-		struct {
-			TokenKind op;
-			Node *lhs;
-			Node *rhs;
-		} binary;
-		struct {
-			TokenKind op;
-			Node *rhs;
-		} unary;
-		struct {
-			Node *expr;
-			String name;
-		} field;
-		struct {
-			Node *expr;
-			NodeArray args;
-		} call;
-		struct {
-			Node *expr;
-			String name;
-			NodeArray args;
-		} method_call;
-		struct {
-			Node *expr;
-		} ret;
-		struct {
-			String name;
-			StringArray args;
-			Node *block;
-		} func;
-		struct {
-			StringArray args;
-			Node *block;
-		} anon_func;
-		struct {
-			String name;
-			Node *expr;
-		} var;
-		struct { int unused;  } _continue;
-		struct { int unused; } _break;
-		struct {
-			Node *init;
-			Node *cond;
-			Node *next;
-			Node *block;
-		} _for;
-		struct {
-			Node *cond;
-			Node *block;
-		} _while;
-		struct {
-			Node *cond;
-			Node *block;
-			Node *else_block; // Can be another if node
-		} _if;
-		struct {
-			Node *expr;
-			Node *index;
-		} index;
-		struct {
-			Node *left;
-			Node *right;
-		} assign;
-		struct {
-			NodeArray stmts;
-		} block;
-		struct {
-			TableEntryArray entries;
-		} table;
-		struct { int unsued;  } _null;
-		struct {
-			String name;
-			String as;
-		} import;
-		struct {
-			String name;
-		} use;
-		struct {
-			TokenKind op;
-			bool post;
-			Node *expr;
-		} incdec;
-	};
-};
-
-typedef Array(Node) NodeMemory;
-typedef struct Parser {
-	Lexer lexer;
-	Token current_token;
-	int token_offset;
-	NodeMemory nodes;
-} Parser;
-
-void init_parser_common(Parser *p) {
+static void init_parser_common(Parser *p) {
 	lex(&p->lexer);
 	p->token_offset = 0;
 	p->current_token = p->lexer.tokens.data[p->token_offset];
@@ -169,7 +17,7 @@ void init_parser_from_string(Parser *p, char *str) {
 	init_parser_common(p);
 }
 
-Node* alloc_node(Parser *p) {
+static Node* alloc_node(Parser *p) {
 	//TODO: Implement arena allocator
 	return calloc(1, sizeof(Node));
 	//Node n = { 0 };
@@ -177,7 +25,7 @@ Node* alloc_node(Parser *p) {
 	//return (Node*)&p->nodes.data[p->nodes.size-1];
 }
 
-Node* make_number(Parser *p, Token number, double value) {
+static Node* make_number(Parser *p, Token number, double value) {
 	assert(number.kind == TOKEN_NUMBER || number.kind == TOKEN_TRUE || number.kind == TOKEN_FALSE);
 	Node *n = alloc_node(p);
 
@@ -189,7 +37,7 @@ Node* make_number(Parser *p, Token number, double value) {
 	return n;
 }
 
-Node* make_name(Parser *p, Token name) {
+static Node* make_name(Parser *p, Token name) {
 	assert(name.kind == TOKEN_IDENT);
 	Node *n = alloc_node(p);
 
@@ -201,7 +49,7 @@ Node* make_name(Parser *p, Token name) {
 	return n;
 }
 
-Node* make_string(Parser *p, Token str) {
+static Node* make_string(Parser *p, Token str) {
 	assert(str.kind == TOKEN_STRING);
 	Node *n = alloc_node(p);
 
@@ -213,7 +61,7 @@ Node* make_string(Parser *p, Token str) {
 	return n;
 }
 
-Node* make_null(Parser *p, Token t) {
+static Node* make_null(Parser *p, Token t) {
 	assert(t.kind = TOKEN_NULL);
 	Node *n = alloc_node(p);
 
@@ -224,7 +72,7 @@ Node* make_null(Parser *p, Token t) {
 	return n;
 }
 
-Node* make_binary(Parser *p, Token op, Node *lhs, Node *rhs) {
+static Node* make_binary(Parser *p, Token op, Node *lhs, Node *rhs) {
 	assert(lhs);
 	assert(rhs);
 	Node *n = alloc_node(p);
@@ -239,7 +87,7 @@ Node* make_binary(Parser *p, Token op, Node *lhs, Node *rhs) {
 	return n;
 }
 
-Node* make_unary(Parser *p, Token op, Node *rhs) {
+static Node* make_unary(Parser *p, Token op, Node *rhs) {
 	assert(op.kind == TOKEN_PLUS || op.kind == TOKEN_MINUS || op.kind == TOKEN_NOT);
 	assert(rhs);
 	Node *n = alloc_node(p);
@@ -253,7 +101,7 @@ Node* make_unary(Parser *p, Token op, Node *rhs) {
 	return n;
 }
 
-Node* make_index(Parser *p, Token op, Node *expr, Node *index_expr) {
+static Node* make_index(Parser *p, Token op, Node *expr, Node *index_expr) {
 	assert(expr);
 	assert(index_expr);
 	Node *n = alloc_node(p);
@@ -267,7 +115,7 @@ Node* make_index(Parser *p, Token op, Node *expr, Node *index_expr) {
 	return n;
 }
 
-Node* make_field(Parser *p, Token field, Node *expr) {
+static Node* make_field(Parser *p, Token field, Node *expr) {
 	assert(expr);
 	Node *n = alloc_node(p);
 
@@ -280,7 +128,7 @@ Node* make_field(Parser *p, Token field, Node *expr) {
 	return n;
 }
 
-Node* make_call(Parser *p, Token lpar, Node *expr, NodeArray args) {
+static Node* make_call(Parser *p, Token lpar, Node *expr, NodeArray args) {
 	assert(expr);
 	Node *n = alloc_node(p);
 	
@@ -293,7 +141,7 @@ Node* make_call(Parser *p, Token lpar, Node *expr, NodeArray args) {
 	return n;
 }
 
-Node* make_method_call(Parser *p, Node *expr, Token name, NodeArray args) {
+static Node* make_method_call(Parser *p, Node *expr, Token name, NodeArray args) {
 	assert(expr);
 	Node *n = alloc_node(p);
 
@@ -308,7 +156,7 @@ Node* make_method_call(Parser *p, Node *expr, Token name, NodeArray args) {
 }
 
 
-Node* make_var(Parser *p, Token var, String name, Node *init) {
+static Node* make_var(Parser *p, Token var, String name, Node *init) {
 	Node *n = alloc_node(p);
 
 	n->loc = var.loc;
@@ -320,7 +168,7 @@ Node* make_var(Parser *p, Token var, String name, Node *init) {
 	return n;
 }
 
-Node* make_if(Parser *p, Token _if, Node *cond, Node *block, Node *else_block) {
+static Node* make_if(Parser *p, Token _if, Node *cond, Node *block, Node *else_block) {
 	assert(cond);
 	assert(block);
 	Node *n = alloc_node(p);
@@ -335,7 +183,7 @@ Node* make_if(Parser *p, Token _if, Node *cond, Node *block, Node *else_block) {
 	return n;
 }
 
-Node* make_block(Parser *p, Token t, NodeArray stmts) {
+static Node* make_block(Parser *p, Token t, NodeArray stmts) {
 	Node *n = alloc_node(p);
 	
 	n->loc = t.loc;
@@ -346,7 +194,7 @@ Node* make_block(Parser *p, Token t, NodeArray stmts) {
 	return n;
 }
 
-Node* make_assign(Parser *p, Token op, Node *expr, Node *value) {
+static Node* make_assign(Parser *p, Token op, Node *expr, Node *value) {
 	assert(expr);
 	assert(value);
 	assert(op.kind == TOKEN_EQUAL);
@@ -361,7 +209,7 @@ Node* make_assign(Parser *p, Token op, Node *expr, Node *value) {
 	return n;
 }
 
-Node* make_return(Parser *p, Token ret, Node *expr) {
+static Node* make_return(Parser *p, Token ret, Node *expr) {
 	Node *n = alloc_node(p);
 	
 	n->loc = ret.loc;
@@ -372,7 +220,7 @@ Node* make_return(Parser *p, Token ret, Node *expr) {
 	return n;
 }
 
-Node* make_continue(Parser *p, Token cont) {
+static Node* make_continue(Parser *p, Token cont) {
 	Node *n = alloc_node(p);
 
 	n->loc = cont.loc;
@@ -382,7 +230,7 @@ Node* make_continue(Parser *p, Token cont) {
 	return n;
 }
 
-Node* make_break(Parser *p, Token cont) {
+static Node* make_break(Parser *p, Token cont) {
 	Node *n = alloc_node(p);
 
 	n->loc = cont.loc;
@@ -392,7 +240,7 @@ Node* make_break(Parser *p, Token cont) {
 	return n;
 }
 
-Node* make_while(Parser *p, Token _while, Node *cond, Node *block) {
+static Node* make_while(Parser *p, Token _while, Node *cond, Node *block) {
 	assert(cond);
 	assert(block);
 	Node *n = alloc_node(p);
@@ -406,7 +254,7 @@ Node* make_while(Parser *p, Token _while, Node *cond, Node *block) {
 	return n;
 }
 
-Node* make_func(Parser *p, Token func, String name, StringArray args, Node *block) {
+static Node* make_func(Parser *p, Token func, String name, StringArray args, Node *block) {
 	assert(block && block->kind == NODE_BLOCK);
 	Node *n = alloc_node(p);
 
@@ -420,7 +268,7 @@ Node* make_func(Parser *p, Token func, String name, StringArray args, Node *bloc
 	return n;
 }
 
-Node* make_anon_func(Parser *p, Token func, StringArray args, Node *block) {
+static Node* make_anon_func(Parser *p, Token func, StringArray args, Node *block) {
 	assert(block && block->kind == NODE_BLOCK);
 	Node *n = alloc_node(p);
 
@@ -433,7 +281,7 @@ Node* make_anon_func(Parser *p, Token func, StringArray args, Node *block) {
 	return n;
 }
 
-Node* make_table(Parser *p, Token t, TableEntryArray entries) {
+static Node* make_table(Parser *p, Token t, TableEntryArray entries) {
 	Node *n = alloc_node(p);
 
 	n->loc = t.loc;
@@ -444,7 +292,7 @@ Node* make_table(Parser *p, Token t, TableEntryArray entries) {
 	return n;
 }
 
-Node* make_incdec(Parser *p, Token op, Node *expr, bool post) {
+static Node* make_incdec(Parser *p, Token op, Node *expr, bool post) {
 	Node *n = alloc_node(p);
 
 	n->loc = op.loc;
@@ -457,7 +305,7 @@ Node* make_incdec(Parser *p, Token op, Node *expr, bool post) {
 	return n;
 }
 
-
+static
 #ifdef _WIN32
 __declspec(noreturn)
 #else
@@ -480,14 +328,14 @@ void parser_error(Parser *parser, char *format, ...) {
 	exit(1);
 }
 
-Token next_token(Parser *p) {
+static Token next_token(Parser *p) {
 	p->token_offset++;
 	p->current_token = p->lexer.tokens.data[p->token_offset];
 	return p->current_token;
 }
 
 // Check current
-bool is_token(Parser *p, TokenKind kind) {
+static bool is_token(Parser *p, TokenKind kind) {
 	if (p->current_token.kind == kind) {
 		return true;
 	}
@@ -495,7 +343,7 @@ bool is_token(Parser *p, TokenKind kind) {
 }
 
 // Check current and eat token if true
-bool match_token(Parser *p, TokenKind kind) {
+static bool match_token(Parser *p, TokenKind kind) {
 	if (p->current_token.kind == kind) {
 		next_token(p);
 		return true;
@@ -503,7 +351,7 @@ bool match_token(Parser *p, TokenKind kind) {
 	return false;
 }
 
-void expect(Parser *p, TokenKind kind) {
+static void expect(Parser *p, TokenKind kind) {
 	if (match_token(p, kind)) {
 		return;
 	}
@@ -515,9 +363,9 @@ void expect(Parser *p, TokenKind kind) {
 	return 0; \
 } while (0);
 
-Node* parse_expr(Parser *p);
-Node* parse_block(Parser *p);
-Node* expr_operand(Parser *p) {
+static Node* parse_expr(Parser *p);
+static Node* parse_block(Parser *p);
+static Node* expr_operand(Parser *p) {
 	Token t = p->current_token;
 	if (match_token(p, TOKEN_NUMBER)) {
 		return make_number(p, t, t.number_value);
@@ -618,7 +466,7 @@ Node* expr_operand(Parser *p) {
 	}
 }
 
-Node* expr_base(Parser *p) {
+static Node* expr_base(Parser *p) {
 	Node *expr = expr_operand(p);
 
 	while (is_token(p, TOKEN_LEFTPAR) || is_token(p, TOKEN_LEFTBRACKET) || is_token(p, TOKEN_DOT) || is_token(p, TOKEN_COLON) || is_token(p, TOKEN_INCREMENT) || is_token(p, TOKEN_DECREMENT) ) {
@@ -695,7 +543,7 @@ Node* expr_base(Parser *p) {
 	return expr;
 }
 
-Node* expr_unary(Parser *p) {
+static Node* expr_unary(Parser *p) {
 	bool is_unary = false;
 	Token op = p->current_token;
 	if (is_token(p, TOKEN_PLUS) || is_token(p, TOKEN_MINUS) || is_token(p, TOKEN_NOT) || is_token(p, TOKEN_INCREMENT) || is_token(p, TOKEN_DECREMENT)) {
@@ -716,7 +564,7 @@ Node* expr_unary(Parser *p) {
 	return rhs;
 }
 
-Node* expr_mul(Parser *p) {
+static Node* expr_mul(Parser *p) {
 	Node *lhs = expr_unary(p);
 
 	while (is_token(p, TOKEN_ASTERISK) ||
@@ -733,7 +581,7 @@ Node* expr_mul(Parser *p) {
 	return lhs;
 }
 
-Node* expr_plus(Parser *p) {
+static Node* expr_plus(Parser *p) {
 	Node *lhs = expr_mul(p);
 
 	while (is_token(p, TOKEN_PLUS) ||
@@ -749,7 +597,7 @@ Node* expr_plus(Parser *p) {
 	return lhs;
 }
 
-Node* expr_equality(Parser *p) {
+static Node* expr_equality(Parser *p) {
 	Node *lhs = expr_plus(p);
 
 	while (
@@ -770,7 +618,7 @@ Node* expr_equality(Parser *p) {
 	return lhs;
 }
 
-Node* expr_land(Parser *p) {
+static Node* expr_land(Parser *p) {
 	Node *lhs = expr_equality(p);
 
 	while (is_token(p, TOKEN_LAND)) {
@@ -784,7 +632,7 @@ Node* expr_land(Parser *p) {
 	return lhs;
 }
 
-Node* expr_lor(Parser *p) {
+static Node* expr_lor(Parser *p) {
 	Node *lhs = expr_land(p);
 
 	while (is_token(p, TOKEN_LOR)) {
@@ -799,11 +647,11 @@ Node* expr_lor(Parser *p) {
 }
 
 // GO-like precedence : https://kuree.gitbooks.io/the-go-programming-language-report/content/31/text.html
-Node* parse_expr(Parser *p) {
+static Node* parse_expr(Parser *p) {
 	return expr_lor(p);
 }
 
-Node* parse_var(Parser *p) {
+static Node* parse_var(Parser *p) {
 	Token var = p->current_token;
 	if (match_token(p, TOKEN_VAR)) {
 		Token name = p->current_token;
@@ -823,7 +671,7 @@ Node* parse_var(Parser *p) {
 	}
 }
 
-Node* parse_return(Parser *p) {
+static Node* parse_return(Parser *p) {
 	Token ret = p->current_token;
 	if (match_token(p, TOKEN_RETURN)) {
 		Node *expr = 0;
@@ -840,7 +688,7 @@ Node* parse_return(Parser *p) {
 	}
 }
 
-Node* parse_continue(Parser *p) {
+static Node* parse_continue(Parser *p) {
 	Token cont = p->current_token;
 	if (match_token(p, TOKEN_CONTINUE)) {
 		expect(p, TOKEN_SEMICOLON);
@@ -852,7 +700,7 @@ Node* parse_continue(Parser *p) {
 	}
 }
 
-Node* parse_break(Parser *p) {
+static Node* parse_break(Parser *p) {
 	Token cont = p->current_token;
 	if (match_token(p, TOKEN_BREAK)) {
 		expect(p, TOKEN_SEMICOLON);
@@ -864,9 +712,9 @@ Node* parse_break(Parser *p) {
 	}
 }
 
-Node* parse_while(Parser *p);
-Node* parse_if(Parser *p);
-Node* parse_block(Parser *p) {
+static Node* parse_while(Parser *p);
+static Node* parse_if(Parser *p);
+static Node* parse_block(Parser *p) {
 	Token lbrace = p->current_token;
 	if (match_token(p, TOKEN_LEFTBRACE)) {
 		NodeArray stmts = {0};
@@ -935,7 +783,7 @@ Node* parse_block(Parser *p) {
 	}
 }
 
-Node* parse_while(Parser *p) {
+static Node* parse_while(Parser *p) {
 	Token _while = p->current_token;
 	if (match_token(p, TOKEN_WHILE)) {
 		Node *cond = parse_expr(p);
@@ -947,7 +795,7 @@ Node* parse_while(Parser *p) {
 	}
 }
 
-Node* parse_if(Parser *p) {
+static Node* parse_if(Parser *p) {
 	Token _if = p->current_token;
 	if (match_token(p, TOKEN_IF)) {
 		Node *cond = parse_expr(p);
@@ -974,7 +822,7 @@ Node* parse_if(Parser *p) {
 	}
 }
 
-Node* parse_func(Parser *p) {
+static Node* parse_func(Parser *p) {
 	Token func = p->current_token;
 	if (match_token(p, TOKEN_FUNC)) {
 		String name = p->current_token.lexeme;
@@ -1009,7 +857,7 @@ Node* parse_func(Parser *p) {
 	}
 }
 
-Node* parse_import(Parser *p) {
+static Node* parse_import(Parser *p) {
 	if (match_token(p, TOKEN_IMPORT)) {
 		Token name = p->current_token;
 		expect(p, TOKEN_STRING);
@@ -1050,7 +898,7 @@ Node* parse_import(Parser *p) {
 }
 
 
-Node* parse_use(Parser *p) {
+static Node* parse_use(Parser *p) {
 	if (match_token(p, TOKEN_USE)) {
 		Token name = p->current_token;
 		expect(p, TOKEN_STRING);
