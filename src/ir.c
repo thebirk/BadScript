@@ -752,6 +752,47 @@ void gc_sweep(Ir *ir) {
 		}
 	}
 
+	{
+		size_t free_buckets = 0;
+		size_t old_buckets = 0;
+		Bucket *b = ir->value_pool.free_buckets;
+		while (b) {
+			free_buckets++;
+			b = b->next;
+		}
+
+		b = ir->scope_pool.free_buckets;
+		while (b) {
+			free_buckets++;
+			b = b->next;
+		}
+
+		b = ir->stmt_pool.free_buckets;
+		while (b) {
+			free_buckets++;
+			b = b->next;
+		}
+
+		b = ir->value_pool.old_buckets;
+		while (b) {
+			old_buckets++;
+			b = b->next;
+		}
+
+		b = ir->scope_pool.old_buckets;
+		while (b) {
+			old_buckets++;
+			b = b->next;
+		}
+
+		b = ir->stmt_pool.old_buckets;
+		while (b) {
+			old_buckets++;
+			b = b->next;
+		}
+
+		printf("Old buckets: %d, free buckets: %d\n", (int) old_buckets, (int) free_buckets);
+	}
 	/*size_t total_free = ir->value_pool.free_count + ir->scope_pool.free_count + ir->stmt_pool.free_count;
 	if (ir->allocated_values < total_free) {
 		pool_free_freelist(&ir->value_pool);
@@ -767,9 +808,9 @@ void gc_sweep(Ir *ir) {
 	if (ir->stmt_pool.buckets > 128) {
 		pool_clear_buckets(&ir->stmt_pool);
 	}*/
-	pool_clear_buckets(&ir->value_pool);
+	/*pool_clear_buckets(&ir->value_pool);
 	pool_clear_buckets(&ir->scope_pool);
-	pool_clear_buckets(&ir->stmt_pool);
+	pool_clear_buckets(&ir->stmt_pool);*/
 }
 
 void do_actual_gc(Ir *ir) {

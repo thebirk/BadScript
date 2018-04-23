@@ -1,0 +1,95 @@
+use "gfx";
+
+var GRASS_TILE = 0;
+var STONE_TILE = 1;
+
+var loaded_tiles = {};
+
+func load_texture(path) {
+	var t = gfx.create_texture(path);
+	if type(t) == type(null) {
+		println("Failed to load texture: ", path);
+	}
+	return t;
+}
+
+func load_tiles() {
+	loaded_tiles[GRASS_TILE] = load_texture("tests/res/grass.bmp");
+	loaded_tiles[STONE_TILE] = load_texture("tests/res/stone.bmp");
+}
+
+func make_tilemap(w, h) {
+	var tm = {
+		w = w,
+		h = h,
+		tiles = {},
+		
+		draw = tilemap_draw,
+		set = tilemap_set,
+	};
+	
+	var i = 0;
+	while i < tm.w*tm.h {
+		tm.tiles[i++] = GRASS_TILE;
+	}
+	
+	return tm;
+}
+
+func tilemap_set(self, x, y, tile) {
+	self.tiles[x+y*self.w] = tile;
+}
+
+func tilemap_draw(self, xoffs, yoffs) {
+	var y = 0;
+	while y < self.h {
+		var x = 0;
+		while x < self.w {
+			var texture = loaded_tiles[self.tiles[x+y*self.w]];
+			var xx = x*texture.width + xoffs;
+			var yy = y*texture.height + yoffs;
+			if xx < -texture.width || xx >= 800 || yy < -texture.height || yy >= 600 {
+				
+			} else {
+			gfx.draw_texture(texture, xx, yy);
+			}
+			
+			x++;
+		}
+		y++;
+	}
+}
+
+func main(args) {
+	gfx.init();
+	gfx.create_window("Tiles", 800, 600, false);
+	
+	load_tiles();
+	
+	var tilemap = make_tilemap(64, 64);
+	tilemap:set(2, 2, STONE_TILE);
+	
+	var x = 0;
+	var y = 0;
+	
+	while !gfx.should_close() {
+		gfx.clear();
+		
+		if gfx.get_key_state(gfx.KEY_LEFT) {
+			x--;
+		} else if gfx.get_key_state(gfx.KEY_RIGHT) {
+			x++;
+		}
+		
+		if gfx.get_key_state(gfx.KEY_UP) {
+			y--;
+		} else if gfx.get_key_state(gfx.KEY_DOWN) {
+			y++;
+		}
+		
+		tilemap:draw(x, y);
+		
+		gfx.present();
+		gfx.update();
+	}
+}
