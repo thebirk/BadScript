@@ -1,5 +1,7 @@
 use "gfx";
+
 import "vec2.bs";
+//import "vec2_anon.bs";
 
 func main(args) {
 	if !gfx.init() {

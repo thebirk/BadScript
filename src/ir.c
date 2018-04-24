@@ -11,6 +11,24 @@ typedef Array(Value*) ValueArray;
 typedef struct Stmt Stmt;
 typedef Array(Stmt*) StmtArray;
 
+typedef enum GCColor {
+	GC_WHITE = 1,
+	GC_GREY  = 2,
+	GC_BLACK = 3,
+} GCColor;
+
+typedef enum GCKind {
+	GC_VALUE = 1,
+	GC_STMT  = 2,
+	GC_SCOPE = 3,
+} GCKind;
+
+#define GC_HEADER GCColor color; GCKind gc_kind; GCObject *next;
+typedef struct GCObject GCObject;
+struct GCObject {
+	GC_HEADER
+};
+
 Value* eval_value(Ir *ir, Scope *scope, Value *v);
 void table_put(Ir *ir, Value *table, Value *key, Value *expr);
 void table_put_name(Ir *ir, Value *table, String name, Value *expr);
@@ -18,9 +36,8 @@ Value* call_function(Ir *ir, Value *func_value, ValueArray args, bool is_method_
 StmtArray convert_nodes_to_stmts(Ir *ir, NodeArray nodes);
 Value* expr_to_value(Ir *ir, Node *n);
 void add_globals(Ir *ir); // Found in runtime.c
-void do_gc(Ir *ir);
-void gc_mark_scope(Scope *scope);
 void free_stmt(Ir *ir, Stmt *stmt);
+void gc_add_to_grey(Ir *ir, GCObject *obj);
 
 #ifdef _WIN32
 __declspec(noreturn)
@@ -82,12 +99,8 @@ typedef enum ValueKind {
 #define isbasic(_v) (isnull(_v) || isnumber(_v) || isstring(_v) || istable(_v))
 
 struct Value {
+	GCObject gc;
 	ValueKind kind;
-
-	// Keeps track of all Values, temps
-	Value *next;
-	// To handle mark and sweep gc
-	bool gc_marked;
 
 	union {
 		struct {
@@ -159,11 +172,9 @@ typedef enum StmtKind {
 } StmtKind;
 
 struct Stmt {
+	GCObject gc;
 	StmtKind kind;
 	SourceLoc loc;
-
-	Stmt *next;
-	bool gc_marked;
 
 	union {
 		struct {
@@ -230,11 +241,10 @@ struct Ir {
 	Pool scope_pool;
 	Pool stmt_pool;
 
-	// Linked lists of all allocated data
-	Value *first_value;
-	Scope *first_scope;
-	Stmt *first_stmt;
-	
+	GCObject *white_list;
+	GCObject *grey_list;
+	GCObject *black_list;
+
 	int allocated_values;
 	int max_allocated_values;
 	bool do_gc;
@@ -269,11 +279,9 @@ void pop_call(Ir *ir) {
 
 typedef struct Scope Scope;
 struct Scope {
+	GCObject gc;
 	Scope *parent;
 	Map symbols; // char*, Value*
-
-	Scope *next;
-	bool gc_marked;
 };
 
 Scope* alloc_scope(Ir *ir) {
@@ -283,10 +291,10 @@ Scope* alloc_scope(Ir *ir) {
 	//memset(scope, 0, sizeof(Scope));
 	Scope *scope = pool_alloc(&ir->scope_pool);
 	
-
-	scope->next = ir->first_scope;
-	ir->first_scope = scope;
-	ir->allocated_values++;
+	scope->gc.gc_kind = GC_SCOPE;
+	scope->gc.color = GC_GREY;
+	scope->gc.next = ir->grey_list;
+	ir->grey_list = (GCObject*)scope;
 
 	return scope;
 }
@@ -296,6 +304,7 @@ void free_scope(Ir *ir, Scope *scope) {
 	pool_release(&ir->scope_pool, scope);
 }
 
+/*
 Scope* make_scope_no_gc(Ir *ir, Scope *parent) {
 	Scope *scope = calloc(1, sizeof(Scope));
 
@@ -303,6 +312,7 @@ Scope* make_scope_no_gc(Ir *ir, Scope *parent) {
 
 	return scope;
 }
+*/
 
 Scope* make_scope(Ir *ir, Scope *parent) {
 	Scope *scope = alloc_scope(ir);
@@ -402,7 +412,7 @@ void ir_error(Ir *ir, char *format, ...) {
 
 uint64_t hash_value(Ir *ir, Value *v) {
 	switch (v->kind) {
-	case VALUE_NULL: return hash_ptr(null_value);
+	case VALUE_NULL: return hash_ptr(null_value); //TODO: This is constant, we only need to hash this ptr once
 	case VALUE_NUMBER: {
 		uint64_t num = 0;
 		assert(sizeof(uint64_t) == sizeof(double));
@@ -458,9 +468,10 @@ Value* alloc_value(Ir *ir) {
 	Value *v = pool_alloc(&ir->value_pool);
 	ir->allocated_values++;
 
-	v->gc_marked = false;
-	v->next = ir->first_value;
-	ir->first_value = v;
+	v->gc.gc_kind = GC_VALUE;
+	v->gc.color = GC_GREY;
+	v->gc.next = ir->grey_list;
+	ir->grey_list = (GCObject*)v;
 
 	return v;
 }
@@ -470,11 +481,336 @@ void free_value(Ir *ir, Value *v) {
 	pool_release(&ir->value_pool, v);
 }
 
+void gc_mark(Ir *ir) {
+	if (ir->global_scope && ir->global_scope->symbols.cap > 0) {
+		for (size_t i = 0; i < ir->global_scope->symbols.cap; i++) {
+			MapEntry *e = &ir->global_scope->symbols.entries[i];
+			if (e->hash) {
+				Value *v = e->val;
+				gc_add_to_grey(ir, (GCObject*)v);
+			}
+		}
+	}
+	if (ir->file_scope && ir->file_scope->symbols.cap > 0) {
+		for (size_t i = 0; i < ir->file_scope->symbols.cap; i++) {
+			MapEntry *e = &ir->file_scope->symbols.entries[i];
+			if (e->hash) {
+				Value *v = e->val;
+				gc_add_to_grey(ir, (GCObject*)v);
+			}
+		}
+	}
+	if (ir->scope_stack.size > 0) {
+		Scope *scope;
+		for_array(ir->scope_stack, scope) {
+			gc_add_to_grey(ir, (GCObject*) scope);
+		}
+	}
+}
+
+void gc_add_to_grey(Ir *ir, GCObject *obj) {
+	if (obj->color == GC_BLACK || obj->color == GC_GREY) return;
+	obj->color = GC_GREY;
+	obj->next = ir->grey_list;
+	ir->grey_list = obj;
+}
+
+void gc_mark_value(Ir *ir, Value *value);
+void gc_mark_stmt(Ir *ir, Stmt *stmt) {
+	if (stmt->gc.color == GC_BLACK) return;
+	stmt->gc.color = GC_BLACK;
+	stmt->gc.next = ir->black_list;
+	ir->black_list = (GCObject*)stmt;
+
+	switch (stmt->kind) {
+	case STMT_VAR: {
+		gc_add_to_grey(ir, (GCObject*) stmt->var.expr);
+	} break;
+	case STMT_ASSIGN: {
+		gc_add_to_grey(ir, (GCObject*)stmt->assign.left);
+		gc_add_to_grey(ir, (GCObject*)stmt->assign.right);
+	} break;
+	case STMT_RETURN: {
+		if (stmt->ret.expr) {
+			gc_add_to_grey(ir, (GCObject*)stmt->ret.expr);
+		}
+	} break;
+	case STMT_CALL: {
+		gc_add_to_grey(ir, (GCObject*)stmt->call.expr);
+		if (stmt->call.args.size > 0) {
+			Value *arg;
+			for_array(stmt->call.args, arg) {
+				gc_add_to_grey(ir, (GCObject*)arg);
+			}
+		}
+	} break;
+	case STMT_METHOD_CALL: {
+		gc_add_to_grey(ir, (GCObject*)stmt->method_call.expr);
+		if (stmt->method_call.args.size > 0) {
+			Value *arg;
+			for_array(stmt->method_call.args, arg) {
+				gc_add_to_grey(ir, (GCObject*)arg);
+			}
+		}
+	} break;
+	case STMT_IF: {
+		gc_add_to_grey(ir, (GCObject*)stmt->_if.cond);
+		gc_add_to_grey(ir, (GCObject*)stmt->_if.if_block);
+		if (stmt->_if.else_block) {
+			gc_add_to_grey(ir, (GCObject*)stmt->_if.else_block);
+		}
+	} break;
+	case STMT_WHILE: {
+		gc_add_to_grey(ir, (GCObject*)stmt->_while.cond);
+		gc_add_to_grey(ir, (GCObject*)stmt->_while.block);
+	} break;
+	case STMT_BLOCK: {
+		Stmt *st;
+		if (stmt->block.stmts.size > 0) {
+			for_array(stmt->block.stmts, st) {
+				gc_add_to_grey(ir, (GCObject*)st);
+			}
+		}
+	} break;
+	case STMT_INCDEC: {
+		gc_add_to_grey(ir, (GCObject*)stmt->incdec.expr);
+	} break;
+	default: {
+		assert(!"How did we get here?");
+	} break;
+	}
+}
+
+void gc_mark_value(Ir *ir, Value *v) {
+	if (v->gc.color == GC_BLACK) return;
+	v->gc.color = GC_BLACK;
+	v->gc.next = ir->black_list;
+	ir->black_list = (GCObject*)v;
+
+	switch (v->kind) {
+	case VALUE_BINOP: {
+		gc_add_to_grey(ir, (GCObject*)v->binary.lhs);
+		gc_add_to_grey(ir, (GCObject*)v->binary.rhs);
+	} break;
+	case VALUE_UNARY: {
+		gc_add_to_grey(ir, (GCObject*)v->unary.v);
+	} break;
+	case VALUE_INDEX: {
+		gc_add_to_grey(ir, (GCObject*)v->index.expr);
+		gc_add_to_grey(ir, (GCObject*)v->index.index);
+	} break;
+	case VALUE_CALL: {
+		gc_add_to_grey(ir, (GCObject*)v->call.expr);
+		if (v->call.args.size > 0) {
+			Value *arg;
+			for_array(v->call.args, arg) {
+				gc_add_to_grey(ir, (GCObject*)arg);
+			}
+		}
+	} break;
+	case VALUE_FIELD: {
+		gc_add_to_grey(ir, (GCObject*)v->field.expr);
+	} break;
+	case VALUE_METHOD_CALL: {
+		gc_add_to_grey(ir, (GCObject*)v->method_call.expr);
+		if (v->method_call.args.size > 0) {
+			Value *arg;
+			for_array(v->method_call.args, arg) {
+				gc_add_to_grey(ir, (GCObject*)arg);
+			}
+		}
+	} break;
+	case VALUE_FUNCTION: {
+		Function *f = &v->func;
+		switch (f->kind) {
+		case FUNCTION_NORMAL: {
+			Stmt *stmt;
+			if (f->normal.stmts.size > 0) {
+				for_array(f->normal.stmts, stmt) {
+					gc_add_to_grey(ir, (GCObject*)stmt);
+				}
+			}
+		} break;
+		case FUNCTION_NATIVE: {
+
+		} break;
+		case FUNCTION_FFI: {
+			assert(!"Nope!");
+		}
+		}
+	} break;
+	case VALUE_TABLE: {
+		for (size_t i = 0; i < v->table.map.cap; i++) {
+			MapEntry *e = &v->table.map.entries[i];
+			if (e->hash) {
+				gc_add_to_grey(ir, (GCObject*)e->val);
+			}
+		}
+	} break;
+	case VALUE_INCDEC: {
+		gc_add_to_grey(ir, (GCObject*)v->incdec.expr);
+	} break;
+	}
+}
+
+void gc_mark_scope(Ir *ir, Scope *scope) {
+	if (scope->gc.color == GC_BLACK) return;
+	scope->gc.color = GC_BLACK;
+	scope->gc.next = ir->black_list;
+	ir->black_list = (GCObject*)scope;
+
+	for (size_t i = 0; i < scope->symbols.cap; i++) {
+		MapEntry *e = &scope->symbols.entries[i];
+
+		if (e->hash) {
+			Value *v = e->val;
+			gc_add_to_grey(ir, (GCObject*)v);
+		}
+
+
+	}
+	if (scope->parent) {
+		gc_add_to_grey(ir, (GCObject*)scope->parent);
+	}
+}
+
+void gc_free_value(Ir *ir, Value *v) {
+	switch (v->kind) {
+	case VALUE_STRING: {
+		//TODO: Replace with string_free
+		free(v->string.str.str);
+	} break;
+	case VALUE_TABLE: {
+		map_free(&v->table.map);
+	} break;
+	case VALUE_NAME: {
+		free(v->name.name.str);
+	} break;
+	case VALUE_FIELD: {
+		free(v->field.name.str);
+	} break;
+	case VALUE_METHOD_CALL: {
+		free(v->method_call.name.str);
+		array_free(v->method_call.args);
+	} break;
+	case VALUE_CALL: {
+		array_free(v->call.args);
+	} break;
+	case VALUE_TABLE_CONSTANT: {
+		array_free(v->table_constant.entries);
+	} break;
+	case VALUE_FUNCTION: {
+		free(v->func.name.str);
+		switch (v->func.kind) {
+		case FUNCTION_NORMAL: {
+			if (v->func.normal.arg_names.size > 0) {
+				String *str;
+				for_array_ref(v->func.normal.arg_names, str) {
+					free(str->str);
+				}
+				array_free(v->func.normal.arg_names);
+			}
+			array_free(v->func.normal.stmts);
+		} break;
+		}
+	} break;
+	}
+	free_value(ir, v);
+}
+
+void gc_free_stmt(Ir *ir, Stmt *stmt) {
+	switch(stmt->kind) {
+	case STMT_VAR: {
+		free(stmt->var.name.str);
+	} break;
+	case STMT_CALL: {
+		array_free(stmt->call.args);
+	} break;
+	case STMT_METHOD_CALL: {
+		array_free(stmt->method_call.args);
+		free(stmt->method_call.name.str);
+	} break;
+	case STMT_BLOCK: {
+		array_free(stmt->block.stmts);
+	} break;
+	}
+
+	free_stmt(ir, stmt);
+}
+
+void gc_free_scope(Ir *ir, Scope *scope) {
+	if (scope->symbols.entries) {
+		map_free(&scope->symbols);
+	}
+	free_scope(ir, scope);
+}
+
+void gc_do_greys(Ir *ir) {
+	if (!ir->do_gc) return;
+	// Just do them all for now
+	GCObject **obj_list = &ir->grey_list;
+	while (*obj_list) {
+		GCObject *obj = *obj_list;
+		*obj_list = obj->next;
+
+		// Mark obj black and all references grey
+		switch (obj->gc_kind) {
+		case GC_VALUE: {
+			gc_mark_value(ir, (Value*) obj);
+		} break;
+		case GC_STMT: {
+			gc_mark_stmt(ir, (Stmt*) obj);
+		} break;
+		case GC_SCOPE: {
+			gc_mark_scope(ir, (Scope*) obj);
+		} break;
+		default: {
+			assert(!"Invalid gc_kind case");
+		}
+		}
+	}
+
+	if (ir->grey_list == 0) {
+		GCObject **obj = &ir->white_list;
+		while (*obj) {
+			GCObject *unreached = *obj;
+			*obj = unreached->next;
+			
+			switch (unreached->gc_kind) {
+			case GC_VALUE: {
+				gc_free_value(ir, (Value*)unreached);
+			} break;
+			case GC_STMT: {
+				gc_free_stmt(ir, (Stmt*)unreached);
+			} break;
+			case GC_SCOPE: {
+				gc_free_scope(ir, (Scope*)unreached);
+			} break;
+			default: {
+				assert(!"Invalid gc_kind");
+			}
+			}
+		}
+
+		obj = &ir->black_list;
+		while (*obj) {
+			GCObject *o = *obj;
+			*obj = o->next;
+			o->color = GC_WHITE;
+			o->next = ir->white_list;
+			ir->white_list = o;
+		}
+
+		gc_mark(ir);
+	}
+}
+
+#if 0
 void gc_mark(Value *v);
 void gc_mark_stmt(Stmt *stmt) {
 	if (stmt->gc_marked) return;
 	stmt->gc_marked = true;
-
+	
 	switch (stmt->kind) {
 	case STMT_VAR: {
 		gc_mark(stmt->var.expr);
@@ -836,6 +1172,7 @@ void do_gc(Ir *ir) {
 void force_gc(Ir *ir) {
 	do_actual_gc(ir);
 }
+#endif
 
 Value* make_string_value(Ir *ir, String str) {
 	Value *v = alloc_value(ir);
@@ -867,9 +1204,11 @@ Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
 	//memset(stmt, 0, sizeof(Stmt));
 	Stmt *stmt = pool_alloc(&ir->stmt_pool);
 
-	stmt->next = ir->first_stmt;
-	ir->first_stmt = stmt;
-	ir->allocated_values++;
+	
+	stmt->gc.gc_kind = GC_STMT;
+	stmt->gc.color = GC_GREY;
+	stmt->gc.next = ir->grey_list;
+	ir->grey_list = (GCObject*)stmt;
 
 	stmt->loc = loc;
 	return stmt;
@@ -1067,6 +1406,7 @@ void ir_import_file(Ir *ir, String path, String as) {
 	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
 }
 
+void gc_mark(Ir *ir);
 void init_ir(Ir *ir, NodeArray stmts) {
 	pool_init(&ir->value_pool, sizeof(Value), 4096);
 	pool_init(&ir->scope_pool, sizeof(Scope), 128);
@@ -1075,12 +1415,13 @@ void init_ir(Ir *ir, NodeArray stmts) {
 	ir->do_gc = false;
 	ir->max_allocated_values = 1024;
 	ir->allocated_values = 0;
-	ir->first_value = 0;
-	ir->first_scope = 0;
-	ir->first_stmt = 0;
+	
+	ir->white_list = 0;
+	ir->grey_list = 0;
+	ir->black_list = 0;
 
-	ir->global_scope = make_scope_no_gc(ir, 0);
-	ir->file_scope = make_scope_no_gc(ir, ir->global_scope);
+	ir->global_scope = make_scope(ir, 0);
+	ir->file_scope = make_scope(ir, ir->global_scope);
 	convert_top_levels_to_ir(ir, ir->file_scope, stmts);
 
 	add_globals(ir);
@@ -1088,6 +1429,8 @@ void init_ir(Ir *ir, NodeArray stmts) {
 	// printf("sizeof(Value): %d\n", (int)sizeof(Value));
 
 	ir->do_gc = true;
+
+	gc_mark(ir);
 }
 
 void do_assign(Ir *ir, Scope *scope, Value *lhs, Value *rhs) {
@@ -1098,8 +1441,6 @@ void do_assign(Ir *ir, Scope *scope, Value *lhs, Value *rhs) {
 	if (lhs->kind != VALUE_NAME && lhs->kind != VALUE_FIELD && lhs->kind != VALUE_INDEX) {
 		ir_error(ir, "Cannot assign to left hand");
 	}
-
-	
 
 	switch (lhs->kind) {
 	case VALUE_NAME: {
@@ -1126,7 +1467,8 @@ void do_assign(Ir *ir, Scope *scope, Value *lhs, Value *rhs) {
 // True if we had a return,break,continue, etc
 bool eval_stmt(Ir *ir, Scope *scope, Stmt *stmt, Value **return_value) {
 	ir->loc = stmt->loc;
-	do_gc(ir);
+	//do_gc(ir);
+	gc_do_greys(ir);
 	switch (stmt->kind) {
 	case STMT_VAR: {
 		Value *v = eval_value(ir, scope, stmt->var.expr);

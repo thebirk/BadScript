@@ -51,9 +51,8 @@ func tilemap_draw(self, xoffs, yoffs) {
 			if xx < -texture.width || xx >= 800 || yy < -texture.height || yy >= 600 {
 				
 			} else {
-			gfx.draw_texture(texture, xx, yy);
+				gfx.draw_texture(texture, xx, yy);
 			}
-			
 			x++;
 		}
 		y++;

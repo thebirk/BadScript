@@ -230,7 +230,10 @@ Value* runtime_sqrt(Ir* ir, ValueArray args) {
 }
 
 Value* runtime_hack_force_gc(Ir *ir, ValueArray args) {
-	force_gc(ir);
+	//force_gc(ir);
+	printf("==============================\n");
+	printf("   Force gc is currently out  \n");
+	printf("==============================\n");
 	return null_value;
 }
 

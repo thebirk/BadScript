@@ -182,7 +182,9 @@ void map_grow(Map *map, size_t new_cap) {
 		}
 	}
 
-	free(map->entries);
+	if (map->entries) {
+		free(map->entries);
+	}
 	*map = new_map;
 }
 
@@ -224,6 +226,9 @@ void* map_get_string(Map *map, String str) {
 }
 
 void map_free(Map *map) {
+	map->cap = 0;
+	map->len = 0;
+
 	free(map->entries);
 }
 
@@ -251,7 +256,7 @@ Bucket* __pool_make_bucket(Pool *pool) {
 
 	bucket->element_size = pool->element_size;
 	bucket->bucket_size = pool->bucket_size;
-	bucket->arena = calloc(1, bucket->bucket_size);
+	bucket->arena = malloc(bucket->bucket_size);
 	bucket->bucket_used = 0;
 	bucket->count = 0;
 	bucket->next = 0;
@@ -287,10 +292,10 @@ void* pool_alloc(Pool *pool) {
 	}
 	Bucket **result = (Bucket**)((uint8_t*)(pool->current_bucket->arena) + pool->current_bucket->bucket_used);
 	pool->current_bucket->bucket_used += pool->current_bucket->element_size;
+	memset(result, 0, pool->current_bucket->element_size);
 	*result = pool->current_bucket;
 	pool->current_bucket->count++;
 	result++;
-	memset(result, 0, pool->current_bucket->element_size - sizeof(Bucket*));
 	return result;
 }
 
@@ -299,6 +304,8 @@ void pool_release(Pool *pool, void *ptr) {
 	header--;
 	Bucket *owner_bucket = *header;
 	owner_bucket->count--;
+	uint64_t *freed_value = ptr;
+	*freed_value = 0xCAFEBABE;
 
 	Bucket **bucket = &pool->old_buckets;
 	while (*bucket) {
