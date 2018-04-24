@@ -23,10 +23,13 @@ typedef enum GCKind {
 	GC_SCOPE = 3,
 } GCKind;
 
-#define GC_HEADER GCColor color; GCKind gc_kind; GCObject *next;
+
 typedef struct GCObject GCObject;
 struct GCObject {
-	GC_HEADER
+	GCColor color;
+	GCKind gc_kind;
+	GCObject *prev;
+	GCObject *next;
 };
 
 Value* eval_value(Ir *ir, Scope *scope, Value *v);
@@ -285,22 +288,18 @@ struct Scope {
 };
 
 Scope* alloc_scope(Ir *ir) {
-	//do_gc(ir);
-
-	//Scope *scope = calloc(1, sizeof(Scope));
-	//memset(scope, 0, sizeof(Scope));
 	Scope *scope = pool_alloc(&ir->scope_pool);
 	
 	scope->gc.gc_kind = GC_SCOPE;
 	scope->gc.color = GC_GREY;
 	scope->gc.next = ir->grey_list;
+	scope->gc.prev = 0;
 	ir->grey_list = (GCObject*)scope;
 
 	return scope;
 }
 
 void free_scope(Ir *ir, Scope *scope) {
-	// free(scope);
 	pool_release(&ir->scope_pool, scope);
 }
 
@@ -461,23 +460,19 @@ Value* table_get_name(Ir *ir, Value *table, String name) {
 }
 
 Value* alloc_value(Ir *ir) {
-	//do_gc(ir);
-
-	//Value *v = calloc(1, sizeof(Value));
-	//memset(v, 0, sizeof(Value));
 	Value *v = pool_alloc(&ir->value_pool);
 	ir->allocated_values++;
 
 	v->gc.gc_kind = GC_VALUE;
 	v->gc.color = GC_GREY;
 	v->gc.next = ir->grey_list;
+	v->gc.prev = 0;
 	ir->grey_list = (GCObject*)v;
 
 	return v;
 }
 
 void free_value(Ir *ir, Value *v) {
-	// free(v);
 	pool_release(&ir->value_pool, v);
 }
 
@@ -508,19 +503,74 @@ void gc_mark(Ir *ir) {
 	}
 }
 
+void gc_remove_from_specific_list(GCObject **list, GCObject *obj) {
+	if (obj->prev) {
+		obj->prev->next = obj->next;
+		if (obj->next) {
+			obj->next->prev = obj->prev;
+		}
+		obj->prev = 0;
+		obj->next = 0;
+	}
+	else {
+		*list = obj->next;
+		if (obj->next) {
+			obj->next->prev = 0;
+			if ((*list)->next) {
+				(*list)->next->prev = *list;
+			}
+		}
+		obj->next = 0;
+		obj->prev = 0;
+	}
+}
+
+void gc_remove_from_list(Ir *ir, GCObject *obj) {
+	switch (obj->color) {
+	case GC_WHITE: {
+		gc_remove_from_specific_list(&ir->white_list, obj);
+	} break;
+	case GC_GREY: {
+		gc_remove_from_specific_list(&ir->grey_list, obj);
+	} break;
+	case GC_BLACK: {
+		gc_remove_from_specific_list(&ir->black_list, obj);
+	} break;
+	default: {
+		assert(!"Invalid color!");
+	}
+	}
+
+	
+}
+
 void gc_add_to_grey(Ir *ir, GCObject *obj) {
 	if (obj->color == GC_BLACK || obj->color == GC_GREY) return;
+	gc_remove_from_list(ir, obj);
 	obj->color = GC_GREY;
 	obj->next = ir->grey_list;
+	if (obj->next) {
+		obj->next->prev = obj;
+	}
+	obj->prev = 0;
 	ir->grey_list = obj;
+}
+
+void gc_add_to_black(Ir *ir, GCObject *obj) {
+	gc_remove_from_list(ir, obj);
+	obj->color = GC_BLACK;
+	obj->next = ir->black_list;
+	if (obj->next) {
+		obj->next->prev = obj;
+	}
+	obj->prev = 0;
+	ir->black_list = obj;
 }
 
 void gc_mark_value(Ir *ir, Value *value);
 void gc_mark_stmt(Ir *ir, Stmt *stmt) {
 	if (stmt->gc.color == GC_BLACK) return;
-	stmt->gc.color = GC_BLACK;
-	stmt->gc.next = ir->black_list;
-	ir->black_list = (GCObject*)stmt;
+	gc_add_to_black(ir, (GCObject*)stmt);
 
 	switch (stmt->kind) {
 	case STMT_VAR: {
@@ -583,9 +633,7 @@ void gc_mark_stmt(Ir *ir, Stmt *stmt) {
 
 void gc_mark_value(Ir *ir, Value *v) {
 	if (v->gc.color == GC_BLACK) return;
-	v->gc.color = GC_BLACK;
-	v->gc.next = ir->black_list;
-	ir->black_list = (GCObject*)v;
+	gc_add_to_black(ir, (GCObject*)v);
 
 	switch (v->kind) {
 	case VALUE_BINOP: {
@@ -655,9 +703,7 @@ void gc_mark_value(Ir *ir, Value *v) {
 
 void gc_mark_scope(Ir *ir, Scope *scope) {
 	if (scope->gc.color == GC_BLACK) return;
-	scope->gc.color = GC_BLACK;
-	scope->gc.next = ir->black_list;
-	ir->black_list = (GCObject*)scope;
+	gc_add_to_black(ir, (GCObject*)scope);
 
 	for (size_t i = 0; i < scope->symbols.cap; i++) {
 		MapEntry *e = &scope->symbols.entries[i];
@@ -748,8 +794,10 @@ void gc_free_scope(Ir *ir, Scope *scope) {
 void gc_do_greys(Ir *ir) {
 	if (!ir->do_gc) return;
 	// Just do them all for now
+
+	int work = 5;
 	GCObject **obj_list = &ir->grey_list;
-	while (*obj_list) {
+	while (*obj_list && work > 0) {
 		GCObject *obj = *obj_list;
 		*obj_list = obj->next;
 
@@ -768,37 +816,49 @@ void gc_do_greys(Ir *ir) {
 			assert(!"Invalid gc_kind case");
 		}
 		}
+
+		work--;
 	}
 
 	if (ir->grey_list == 0) {
-		GCObject **obj = &ir->white_list;
-		while (*obj) {
-			GCObject *unreached = *obj;
-			*obj = unreached->next;
-			
-			switch (unreached->gc_kind) {
-			case GC_VALUE: {
-				gc_free_value(ir, (Value*)unreached);
-			} break;
-			case GC_STMT: {
-				gc_free_stmt(ir, (Stmt*)unreached);
-			} break;
-			case GC_SCOPE: {
-				gc_free_scope(ir, (Scope*)unreached);
-			} break;
-			default: {
-				assert(!"Invalid gc_kind");
-			}
+		{
+			GCObject *obj = ir->white_list;
+			while (obj) {
+				GCObject *unreached = obj;
+				gc_remove_from_list(ir, obj);
+				obj = ir->white_list;
+
+				switch (unreached->gc_kind) {
+				case GC_VALUE: {
+					gc_free_value(ir, (Value*)unreached);
+				} break;
+				case GC_STMT: {
+					gc_free_stmt(ir, (Stmt*)unreached);
+				} break;
+				case GC_SCOPE: {
+					gc_free_scope(ir, (Scope*)unreached);
+				} break;
+				default: {
+					assert(!"Invalid gc_kind");
+				}
+				}
 			}
 		}
 
-		obj = &ir->black_list;
-		while (*obj) {
-			GCObject *o = *obj;
-			*obj = o->next;
-			o->color = GC_WHITE;
-			o->next = ir->white_list;
-			ir->white_list = o;
+		{
+			GCObject *obj = ir->black_list;
+			while (obj) {
+				GCObject *o = obj;
+				gc_remove_from_list(ir, o);
+				o->color = GC_WHITE;
+				o->next = ir->white_list;
+				if (o->next) {
+					o->next->prev = o;
+				}
+				o->prev = 0;
+				ir->white_list = o;
+				obj = ir->black_list;
+			}
 		}
 
 		gc_mark(ir);
@@ -1198,16 +1258,12 @@ Value* make_native_function(Ir *ir, String name, Value* (*func)(Ir *ir, ValueArr
 }
 
 Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
-	//do_gc(ir);
-
-	//Stmt *stmt = calloc(1, sizeof(Stmt));
-	//memset(stmt, 0, sizeof(Stmt));
 	Stmt *stmt = pool_alloc(&ir->stmt_pool);
 
-	
 	stmt->gc.gc_kind = GC_STMT;
 	stmt->gc.color = GC_GREY;
 	stmt->gc.next = ir->grey_list;
+	stmt->gc.prev = 0;
 	ir->grey_list = (GCObject*)stmt;
 
 	stmt->loc = loc;
@@ -1215,7 +1271,6 @@ Stmt* alloc_stmt(Ir *ir, SourceLoc loc) {
 }
 
 void free_stmt(Ir *ir, Stmt *stmt) {
-	// free(stmt);
 	pool_release(&ir->stmt_pool, stmt);
 }
 
